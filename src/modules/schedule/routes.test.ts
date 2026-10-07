@@ -79,6 +79,15 @@ describe('расписание через API', () => {
     const left = await listForStudent(student.id);
     expect(left.every(l => l.seriesId !== next.id)).toBe(true);
     expect(left.map(l => l.id)).toContain(oneOff.id);
+
+    const del = (id: string) => adminApi(auth, `/admin/lessons/${id}`, { method: 'DELETE' });
+    const fromSeries = left.find(l => l.seriesId);
+    if (!fromSeries) throw new Error('no series lesson');
+    const conflict = await del(fromSeries.id);
+    expect(conflict.status).toBe(409);
+    expect(await conflict.json()).toMatchObject({ error: { code: 'lesson_in_series' } });
+    expect((await del(oneOff.id)).status).toBe(204);
+    expect((await del(oneOff.id)).status).toBe(404);
   });
 
   it('ошибки: дата в прошлом → 400, удалённый ученик → 404, неизвестный пояс → 400', async () => {

@@ -8,6 +8,7 @@ import {
   changeSeries,
   createLesson,
   createSeries,
+  deleteLesson,
   endSeries,
   getLesson,
   listLessons,
@@ -57,4 +58,8 @@ export const lessonsRoutes = new Hono<{ Bindings: Env }>()
     async c => c.json(await updateLesson(getDb(c.env), c.req.param('id'), c.req.valid('json'))),
   )
   .post('/:id/cancel', async c => c.json(await setLessonStatus(getDb(c.env), c.req.param('id'), 'cancelled')))
-  .post('/:id/restore', async c => c.json(await setLessonStatus(getDb(c.env), c.req.param('id'), 'scheduled')));
+  .post('/:id/restore', async c => c.json(await setLessonStatus(getDb(c.env), c.req.param('id'), 'scheduled')))
+  .delete('/:id', async c => {
+    await deleteLesson(getDb(c.env), c.req.param('id'));
+    return c.body(null, 204);
+  });

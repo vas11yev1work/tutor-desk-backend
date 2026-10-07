@@ -30,6 +30,7 @@ describe('админские эндпоинты без cookie → 401', () => {
     ['GET', '/admin/lessons/x'],
     ['POST', '/admin/lessons'],
     ['PATCH', '/admin/lessons/x'],
+    ['DELETE', '/admin/lessons/x'],
     ['POST', '/admin/lessons/x/cancel'],
   ])('%s %s', async (method, path) => {
     const res = await api(path, { method, headers: { origin: ORIGIN } });

@@ -229,6 +229,16 @@ export const updateLesson = async (db: Db, id: string, patch: Partial<Pick<Lesso
   return lesson;
 };
 
+/** Удаление только разовых: занятие из правила cron создал бы заново — для них отмена или завершение правила. */
+export const deleteLesson = async (db: Db, id: string) => {
+  const lesson = await db.select({ seriesId: lessons.seriesId }).from(lessons).where(eq(lessons.id, id)).get();
+  if (!lesson) throw notFound('Занятие не найдено');
+  if (lesson.seriesId) {
+    throw new ApiError(409, 'lesson_in_series', 'Занятие из регулярного правила нельзя удалить, только отменить');
+  }
+  await db.delete(lessons).where(eq(lessons.id, id));
+};
+
 export const setLessonStatus = async (db: Db, id: string, status: Lesson['status']) => {
   const [lesson] = await db.update(lessons).set({ status }).where(eq(lessons.id, id)).returning();
   if (!lesson) throw notFound('Занятие не найдено');
