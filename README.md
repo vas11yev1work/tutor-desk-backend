@@ -14,6 +14,7 @@ API кабинета репетитора: Hono на Cloudflare Workers, фай�
 - `bun db:generate` — сгенерировать SQL-миграцию в `drizzle/` из `src/db/schema`
 - `bun db:migrate:local` / `bun db:migrate:remote` — применить миграции к локальной / продовой D1
 - `bun db:studio` — Drizzle Studio против продовой D1
+- `bun db:studio:local` — Drizzle Studio против локальной D1 (`.wrangler/state`)
 
 ## Первый деплой
 
@@ -44,6 +45,8 @@ API кабинета репетитора: Hono на Cloudflare Workers, фай�
 Проверка: `GET /api/health/db` → `{ "db": "ok" }`.
 
 ### Drizzle Studio
+
+Локально: `bun db:studio:local` (база появится после `bun db:migrate:local`).
 
 `bun db:studio` ходит в продовую D1 по HTTP API (driver `d1-http`). Нужны переменные в `.dev.vars`
 (шаблон — `.dev.vars.example`) или в окружении:
