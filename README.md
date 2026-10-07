@@ -72,6 +72,7 @@ API кабинета репетитора: Hono на Cloudflare Workers, фай�
 
 - `POST /api/auth/login` `{ login, password }` → 204 + cookie `session` (JWT HS256, 30 дней, HttpOnly, SameSite=Lax, Secure на https)
 - `GET /api/auth/me` → `{ authenticated: true }` или 401
+- Сессия скользящая: если JWT старше суток, любой авторизованный запрос (в т.ч. `/me`) выдаёт новую cookie ещё на 30 дней. Разлогинит только 30 дней без заходов, logout или смена `JWT_SECRET`
 - `POST /api/auth/logout` → 204, cookie удалена
 - `/api/admin/*` требует cookie; без неё — 401 `{ error: { code: 'unauthorized' } }`
 - Изменяющие запросы на `/api/admin/*` и `/api/auth/*` проверяются по Origin (`vars.ALLOWED_ORIGINS` в `wrangler.jsonc`, через запятую)

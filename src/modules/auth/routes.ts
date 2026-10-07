@@ -1,14 +1,12 @@
 import { sValidator } from '@hono/standard-validator';
 import { Hono } from 'hono';
-import { deleteCookie, setCookie } from 'hono/cookie';
-import { sign } from 'hono/jwt';
 import * as v from 'valibot';
 
 import { getDb } from '../../db';
 import { onInvalid } from '../../lib/validation';
 import { registerAttempt, resetAttempts } from './attempts';
 import { requireAuth } from './middleware';
-import { SESSION_COOKIE, SESSION_TTL_S } from './session';
+import { clearSession, issueSession } from './session';
 
 const sha256 = (s: string) => crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
 
@@ -16,8 +14,6 @@ const sha256 = (s: string) => crypto.subtle.digest('SHA-256', new TextEncoder().
 const safeEqual = async (a: string, b: string) => crypto.subtle.timingSafeEqual(await sha256(a), await sha256(b));
 
 const credentials = v.object({ login: v.string(), password: v.string() });
-
-const isHttps = (url: string) => new URL(url).protocol === 'https:';
 
 export const authRoutes = new Hono<{ Bindings: Env }>()
   .post('/login', sValidator('json', credentials, onInvalid), async c => {
@@ -45,19 +41,11 @@ export const authRoutes = new Hono<{ Bindings: Env }>()
 
     await resetAttempts(db, ip);
 
-    const iat = Math.floor(now / 1000);
-    const token = await sign({ sub: 'admin', iat, exp: iat + SESSION_TTL_S }, c.env.JWT_SECRET, 'HS256');
-    setCookie(c, SESSION_COOKIE, token, {
-      httpOnly: true,
-      sameSite: 'Lax',
-      path: '/',
-      maxAge: SESSION_TTL_S,
-      secure: isHttps(c.req.url),
-    });
+    await issueSession(c);
     return c.body(null, 204);
   })
   .get('/me', requireAuth, c => c.json({ authenticated: true }))
   .post('/logout', c => {
-    deleteCookie(c, SESSION_COOKIE, { path: '/', httpOnly: true, sameSite: 'Lax', secure: isHttps(c.req.url) });
+    clearSession(c);
     return c.body(null, 204);
   });

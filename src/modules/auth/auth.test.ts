@@ -70,6 +70,24 @@ describe('сессия', () => {
     expect(await res.json()).toEqual({ authenticated: true });
   });
 
+  it('скользящая сессия: JWT старше суток продлевается ещё на 30 дней', async () => {
+    const iat = nowS() - 2 * 24 * 60 * 60;
+    const old = await sign({ sub: 'admin', iat, exp: iat + 30 * 24 * 60 * 60 }, env.JWT_SECRET, 'HS256');
+    const res = await request('/admin/students', { headers: { cookie: `session=${old}` } });
+    expect(res.status).toBe(200);
+    const cookie = res.headers.get('set-cookie') ?? '';
+    expect(cookie).toMatch(/^session=/);
+    expect(cookie).toContain('Max-Age=2592000');
+    expect(cookie).toContain('HttpOnly');
+    expect(cookie.split(';')[0]).not.toBe(`session=${old}`);
+  });
+
+  it('свежая сессия не переподписывается на каждом запросе', async () => {
+    const res = await request('/auth/me', { headers: { cookie: await sessionCookie() } });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('set-cookie')).toBeNull();
+  });
+
   it('logout удаляет cookie', async () => {
     const res = await request('/auth/logout', { method: 'POST', headers: { origin: ORIGIN } });
     expect(res.status).toBe(204);
