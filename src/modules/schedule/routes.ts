@@ -9,6 +9,7 @@ import {
   createLesson,
   createSeries,
   endSeries,
+  getLesson,
   listLessons,
   setLessonStatus,
   updateLesson,
@@ -40,6 +41,7 @@ export const lessonsRoutes = new Hono<{ Bindings: Env }>()
   .get('/', sValidator('query', rangeQuery, onInvalid), async c =>
     c.json(await listLessons(getDb(c.env), c.req.valid('query'))),
   )
+  .get('/:id', async c => c.json(await getLesson(getDb(c.env), c.req.param('id'))))
   .post(
     '/',
     sValidator('json', v.object({ studentId: v.string(), startsAt: isoTimestamp, durationMin }), onInvalid),

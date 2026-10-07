@@ -27,6 +27,7 @@ describe('админские эндпоинты без cookie → 401', () => {
     ['POST', '/admin/series/x/change'],
     ['POST', '/admin/series/x/end'],
     ['GET', '/admin/lessons?from=2026-01-01T00:00:00Z&to=2026-02-01T00:00:00Z'],
+    ['GET', '/admin/lessons/x'],
     ['POST', '/admin/lessons'],
     ['PATCH', '/admin/lessons/x'],
     ['POST', '/admin/lessons/x/cancel'],

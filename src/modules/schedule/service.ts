@@ -179,7 +179,7 @@ export const listActiveSeries = async (db: Db, studentId: string, now: number) =
 };
 
 /** Занятия, у которых в диапазон попадает startsAt или originalStartsAt: перенесённое видно в обоих днях. */
-export const listLessons = (db: Db, range: { from: Date; to: Date; studentId?: string }) =>
+const selectLessons = (db: Db) =>
   db
     .select({
       id: lessons.id,
@@ -192,7 +192,16 @@ export const listLessons = (db: Db, range: { from: Date; to: Date; studentId?: s
       student: { id: students.id, name: students.name, grade: students.grade, exam: students.exam },
     })
     .from(lessons)
-    .innerJoin(students, eq(students.id, lessons.studentId))
+    .innerJoin(students, eq(students.id, lessons.studentId));
+
+export const getLesson = async (db: Db, id: string) => {
+  const lesson = await selectLessons(db).where(eq(lessons.id, id)).get();
+  if (!lesson) throw notFound('Занятие не найдено');
+  return lesson;
+};
+
+export const listLessons = (db: Db, range: { from: Date; to: Date; studentId?: string }) =>
+  selectLessons(db)
     .where(
       and(
         or(

@@ -49,6 +49,8 @@ describe('расписание через API', () => {
 
     const [first] = lessons;
     if (!first) throw new Error('no lessons');
+    expect(await (await adminApi(auth, `/admin/lessons/${first.id}`)).json()).toEqual(first);
+    expect((await adminApi(auth, '/admin/lessons/nope')).status).toBe(404);
     const startsAt = new Date(Date.parse(first.startsAt as unknown as string) + 3600_000).toISOString();
     const moved = await adminApi(auth, `/admin/lessons/${first.id}`, { method: 'PATCH', body: { startsAt } });
     expect(await moved.json()).toMatchObject({ startsAt, isModified: true });
