@@ -43,7 +43,7 @@ describe('/api/s/:token', () => {
     const body = await res.text();
     expect(body).not.toMatch(/access_?token|contact|notes/i);
     expect(JSON.parse(body)).toEqual([
-      { id: lesson.id, startsAt: lesson.startsAt, durationMin: 60, status: 'scheduled' },
+      { id: lesson.id, startsAt: lesson.startsAt, originalStartsAt: null, durationMin: 60, status: 'scheduled' },
     ]);
   });
 

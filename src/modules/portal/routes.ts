@@ -29,5 +29,13 @@ export const portalRoutes = new Hono<{ Bindings: Env }>()
     const db = getDb(c.env);
     const { id } = await findStudent(db, c.req.param('token'));
     const rows = await listLessons(db, { ...c.req.valid('query'), studentId: id });
-    return c.json(rows.map(l => ({ id: l.id, startsAt: l.startsAt, durationMin: l.durationMin, status: l.status })));
+    return c.json(
+      rows.map(l => ({
+        id: l.id,
+        startsAt: l.startsAt,
+        originalStartsAt: l.originalStartsAt,
+        durationMin: l.durationMin,
+        status: l.status,
+      })),
+    );
   });

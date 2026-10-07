@@ -168,6 +168,7 @@ export const deleteStudent = async (db: Db, studentId: string) => {
   ]);
 };
 
+/** Занятия, у которых в диапазон попадает startsAt или originalStartsAt: перенесённое видно в обоих днях. */
 export const listLessons = (db: Db, range: { from: Date; to: Date; studentId?: string }) =>
   db
     .select({
@@ -184,8 +185,10 @@ export const listLessons = (db: Db, range: { from: Date; to: Date; studentId?: s
     .innerJoin(students, eq(students.id, lessons.studentId))
     .where(
       and(
-        gte(lessons.startsAt, range.from),
-        lt(lessons.startsAt, range.to),
+        or(
+          and(gte(lessons.startsAt, range.from), lt(lessons.startsAt, range.to)),
+          and(gte(lessons.originalStartsAt, range.from), lt(lessons.originalStartsAt, range.to)),
+        ),
         range.studentId ? eq(lessons.studentId, range.studentId) : undefined,
       ),
     )
