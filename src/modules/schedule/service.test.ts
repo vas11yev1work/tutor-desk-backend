@@ -13,8 +13,6 @@ import {
   createSeries,
   endSeries,
   generateAll,
-  generateForSeries,
-  horizon,
   updateLesson,
 } from './service';
 
@@ -84,7 +82,6 @@ describe('генерация', () => {
     const series = await wednesdays(studentId);
     const before = await seriesLessons(series.id);
 
-    await generateForSeries(db, series.id, horizon(NOW, ROME), NOW);
     await generateAll(db, NOW);
 
     expect(await seriesLessons(series.id)).toEqual(before);
@@ -101,7 +98,7 @@ describe('изменения', () => {
 
     const movedTo = new Date('2026-11-19T15:00:00Z');
     await updateLesson(db, target.id, { startsAt: movedTo });
-    await generateForSeries(db, series.id, horizon(NOW, ROME), NOW);
+    await generateAll(db, NOW);
 
     const after = await seriesLessons(series.id);
     expect(after).toHaveLength(8);

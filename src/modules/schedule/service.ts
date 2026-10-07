@@ -70,12 +70,6 @@ const getActiveSeries = async (db: Db, seriesId: string, fromDate: string, now: 
   return series;
 };
 
-export const generateForSeries = async (db: Db, seriesId: string, untilDate: string, now: number) => {
-  const series = await db.select().from(lessonSeries).where(eq(lessonSeries.id, seriesId)).get();
-  if (!series) throw notFound('Правило не найдено');
-  await runBatch(db, generateQueries(db, series, untilDate, now));
-};
-
 /** Cron: догенерировать занятия всех активных правил до горизонта. */
 export const generateAll = async (db: Db, now: number) => {
   // Пояса правил отличаются от UTC максимум на сутки; точную границу проверяет occurrences().
