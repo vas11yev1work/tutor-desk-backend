@@ -14,6 +14,7 @@ export default defineConfig({
           ADMIN_LOGIN: 'admin',
           ADMIN_PASSWORD: 'test-password',
           JWT_SECRET: 'test-jwt-secret',
+          ALLOWED_ORIGINS: 'http://localhost:5173',
           TEST_MIGRATIONS: await readD1Migrations('./drizzle'),
         },
       },

@@ -11,9 +11,12 @@
   "triggers": {
     "crons": ["0 3 * * *"],
   },
+  "routes": [{ "pattern": "desk.vslvv.com/api/*", "zone_name": "vslvv.com" }],
+  "workers_dev": false, // API доступен только через домен
   "vars": {
-    // Origin'ы фронта для CSRF-проверки (hono/csrf), через запятую. Перед деплоем добавить прод-домен.
-    "ALLOWED_ORIGINS": "http://localhost:5173",
+    // Origin'ы фронта для CSRF-проверки (hono/csrf), через запятую.
+    // Локально переопределяется в .dev.vars (http://localhost:5173), в тестах — в vitest.config.js.
+    "ALLOWED_ORIGINS": "https://desk.vslvv.com",
   },
   "r2_buckets": [
     {
