@@ -29,6 +29,13 @@
       "when": 1791397118920,
       "tag": "0003_soft_hellion",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1791408621770,
+      "tag": "0004_brief_the_captain",
+      "breakpoints": true
     }
   ]
 }

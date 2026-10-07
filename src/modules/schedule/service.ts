@@ -1,9 +1,10 @@
-import { and, asc, eq, gte, inArray, isNull, lt, or } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNull, lt, or, type SQL } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import { nanoid } from 'nanoid';
 
 import { type Db, runBatch } from '../../db';
 import { ApiError, notFound } from '../../lib/errors';
+import { assignments } from '../assignments/schema';
 import { students } from '../students/schema';
 import { type Lesson, lessons, lessonSeries, type Series } from './schema';
 import { addDays, isoWeekday, localDate, toUtc } from './time';
@@ -194,24 +195,43 @@ const selectLessons = (db: Db) =>
     .from(lessons)
     .innerJoin(students, eq(students.id, lessons.studentId));
 
+/** Файлы занятий, подходящих под условие, — одним запросом, без списка id (у D1 лимит параметров). */
+const withAssignments = async <T extends { id: string }>(db: Db, rows: T[], where: SQL | undefined) => {
+  const files = rows.length
+    ? await db
+        .select({
+          id: assignments.id,
+          lessonId: assignments.lessonId,
+          kind: assignments.kind,
+          fileName: assignments.fileName,
+          size: assignments.size,
+          createdAt: assignments.createdAt,
+        })
+        .from(assignments)
+        .innerJoin(lessons, eq(lessons.id, assignments.lessonId))
+        .where(where)
+        .orderBy(asc(assignments.createdAt), asc(assignments.id))
+    : [];
+  return rows.map(row => ({ ...row, assignments: files.filter(f => f.lessonId === row.id) }));
+};
+
 export const getLesson = async (db: Db, id: string) => {
-  const lesson = await selectLessons(db).where(eq(lessons.id, id)).get();
+  const where = eq(lessons.id, id);
+  const [lesson] = await withAssignments(db, await selectLessons(db).where(where), where);
   if (!lesson) throw notFound('Занятие не найдено');
   return lesson;
 };
 
-export const listLessons = (db: Db, range: { from: Date; to: Date; studentId?: string }) =>
-  selectLessons(db)
-    .where(
-      and(
-        or(
-          and(gte(lessons.startsAt, range.from), lt(lessons.startsAt, range.to)),
-          and(gte(lessons.originalStartsAt, range.from), lt(lessons.originalStartsAt, range.to)),
-        ),
-        range.studentId ? eq(lessons.studentId, range.studentId) : undefined,
-      ),
-    )
-    .orderBy(asc(lessons.startsAt));
+export const listLessons = async (db: Db, range: { from: Date; to: Date; studentId?: string }) => {
+  const where = and(
+    or(
+      and(gte(lessons.startsAt, range.from), lt(lessons.startsAt, range.to)),
+      and(gte(lessons.originalStartsAt, range.from), lt(lessons.originalStartsAt, range.to)),
+    ),
+    range.studentId ? eq(lessons.studentId, range.studentId) : undefined,
+  );
+  return withAssignments(db, await selectLessons(db).where(where).orderBy(asc(lessons.startsAt)), where);
+};
 
 export const createLesson = async (db: Db, input: Pick<Lesson, 'studentId' | 'startsAt' | 'durationMin'>) => {
   await assertStudent(db, input.studentId);

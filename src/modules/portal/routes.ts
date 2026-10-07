@@ -5,6 +5,7 @@ import { Hono } from 'hono';
 import { type Db, getDb } from '../../db';
 import { notFound } from '../../lib/errors';
 import { onInvalid, rangeQuery } from '../../lib/validation';
+import { fileResponse, listMocks } from '../assignments/service';
 import { listLessons } from '../schedule/service';
 import { students } from '../students/schema';
 
@@ -36,6 +37,24 @@ export const portalRoutes = new Hono<{ Bindings: Env }>()
         originalStartsAt: l.originalStartsAt,
         durationMin: l.durationMin,
         status: l.status,
+        assignments: l.assignments.map(a => ({ id: a.id, kind: a.kind, fileName: a.fileName })),
       })),
     );
+  })
+  .get('/:token/mocks', async c => {
+    const db = getDb(c.env);
+    const { id } = await findStudent(db, c.req.param('token'));
+    return c.json(
+      (await listMocks(db, id)).map(m => ({
+        id: m.id,
+        number: m.number,
+        fileName: m.fileName,
+        createdAt: m.createdAt,
+      })),
+    );
+  })
+  .get('/:token/files/:id', async c => {
+    const db = getDb(c.env);
+    const { id } = await findStudent(db, c.req.param('token'));
+    return fileResponse(db, c.env.FILES, c.req.param('id'), id);
   });

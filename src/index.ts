@@ -4,6 +4,8 @@ import { HTTPException } from 'hono/http-exception';
 
 import { getDb } from './db';
 import { ApiError } from './lib/errors';
+import { assignmentsRoutes } from './modules/assignments/routes';
+import { sweepOrphanFiles } from './modules/assignments/service';
 import { csrfProtection, requireAuth } from './modules/auth/middleware';
 import { authRoutes } from './modules/auth/routes';
 import { portalRoutes } from './modules/portal/routes';
@@ -29,6 +31,7 @@ app.route('/auth', authRoutes);
 app.route('/admin/students', studentsRoutes);
 app.route('/admin/series', seriesRoutes);
 app.route('/admin/lessons', lessonsRoutes);
+app.route('/admin/assignments', assignmentsRoutes);
 // Публичный контур ученика: вне /admin, поэтому auth и csrf на него не действуют.
 app.route('/s', portalRoutes);
 
@@ -46,8 +49,9 @@ app.onError((err, c) => {
 
 export default {
   fetch: app.fetch,
-  // Cron Trigger (раз в сутки): догенерировать занятия всех активных правил до горизонта 8 недель.
+  // Cron Trigger (раз в сутки): догенерировать занятия до горизонта 8 недель и подчистить файлы без заданий.
   scheduled: (_controller, env, ctx) => {
-    ctx.waitUntil(generateAll(getDb(env), Date.now()));
+    const db = getDb(env);
+    ctx.waitUntil(Promise.all([generateAll(db, Date.now()), sweepOrphanFiles(db, env.FILES, Date.now())]));
   },
 } satisfies ExportedHandler<Env>;
