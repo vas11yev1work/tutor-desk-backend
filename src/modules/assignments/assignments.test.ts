@@ -89,13 +89,13 @@ describe('задания: домашки и пробники', () => {
 
     const mocks = await (await adminApi(auth, `/admin/students/${student.id}/mocks`)).json<Uploaded[]>();
     expect(mocks).toMatchObject([
-      { id: first.id, number: 1, lessonId: lesson.id },
-      { id: second.id, number: 2, lessonId: later.id },
+      { id: first.id, number: 1, lessonId: lesson.id, lessonStartsAt: lesson.startsAt },
+      { id: second.id, number: 2, lessonId: later.id, lessonStartsAt: later.startsAt },
     ]);
     const portal = await (await api(`/s/${student.accessToken}/mocks`)).json();
     expect(portal).toMatchObject([
-      { id: first.id, number: 1, fileName: 'П1.pdf' },
-      { id: second.id, number: 2, fileName: 'П2.pdf' },
+      { id: first.id, number: 1, fileName: 'П1.pdf', lessonStartsAt: lesson.startsAt },
+      { id: second.id, number: 2, fileName: 'П2.pdf', lessonStartsAt: later.startsAt },
     ]);
   });
 

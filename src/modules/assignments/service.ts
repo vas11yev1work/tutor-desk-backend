@@ -50,14 +50,15 @@ export const uploadToLesson = async (
   return publicAssignment(await db.insert(assignments).values(row).returning().get());
 };
 
-/** Пробники ученика по порядку загрузки; number — «Пробник N». */
+/** Пробники ученика по порядку загрузки; number — «Пробник N», lessonStartsAt — дата занятия, к которому выдан. */
 export const listMocks = async (db: Db, studentId: string) => {
   const rows = await db
-    .select()
+    .select({ assignment: assignments, lessonStartsAt: lessons.startsAt })
     .from(assignments)
+    .innerJoin(lessons, eq(lessons.id, assignments.lessonId))
     .where(and(eq(assignments.studentId, studentId), eq(assignments.kind, 'mock')))
     .orderBy(asc(assignments.createdAt), asc(assignments.id));
-  return rows.map((a, i) => ({ ...publicAssignment(a), number: i + 1 }));
+  return rows.map((r, i) => ({ ...publicAssignment(r.assignment), lessonStartsAt: r.lessonStartsAt, number: i + 1 }));
 };
 
 export const deleteAssignment = async (db: Db, files: R2Bucket, id: string) => {

@@ -49,6 +49,7 @@ export const portalRoutes = new Hono<{ Bindings: Env }>()
         id: m.id,
         number: m.number,
         fileName: m.fileName,
+        lessonStartsAt: m.lessonStartsAt,
         createdAt: m.createdAt,
       })),
     );
