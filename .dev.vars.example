@@ -1,0 +1,10 @@
+# Локальные секреты для `wrangler dev`. Скопируйте в .dev.vars и заполните.
+# В проде задаются через `bunx wrangler secret put <NAME>`.
+
+# Drizzle Kit (driver d1-http) — нужны для `bun db:studio` против удалённой D1.
+# Account ID: Cloudflare Dashboard → Workers & Pages (правая колонка) или `bunx wrangler whoami`.
+CLOUDFLARE_ACCOUNT_ID=
+# Database ID: вывод `bunx wrangler d1 create tutor-desk-db` или `bunx wrangler d1 list`.
+CLOUDFLARE_DATABASE_ID=
+# API token с правом D1:Edit: Dashboard → My Profile → API Tokens.
+CLOUDFLARE_D1_TOKEN=

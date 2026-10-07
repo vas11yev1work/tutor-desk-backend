@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1791386070876,
+      "tag": "0000_real_marauders",
+      "breakpoints": true
+    }
+  ]
+}

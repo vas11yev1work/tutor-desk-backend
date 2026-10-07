@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "tutor-desk-backend",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+  },
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "tutor-desk-files",
+    },
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "tutor-desk-db",
+      "database_id": "56b13e49-b823-4ab3-a290-2fb40c52f199",
+      "migrations_dir": "drizzle",
+    },
+  ],
+}
