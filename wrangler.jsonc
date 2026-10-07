@@ -7,6 +7,10 @@
   "observability": {
     "enabled": true,
   },
+  // Раз в сутки догенерировать регулярные занятия на 8 недель вперёд (scheduled в src/index.ts).
+  "triggers": {
+    "crons": ["0 3 * * *"],
+  },
   "vars": {
     // Origin'ы фронта для CSRF-проверки (hono/csrf), через запятую. Перед деплоем добавить прод-домен.
     "ALLOWED_ORIGINS": "http://localhost:5173",

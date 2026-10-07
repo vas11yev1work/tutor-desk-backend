@@ -88,3 +88,35 @@ bunx wrangler secret put JWT_SECRET   # значение: openssl rand -base64 4
 ```
 
 Смена `JWT_SECRET` разлогинивает все сессии.
+
+## Ученики и расписание
+
+Модули `src/modules/students`, `src/modules/schedule`, `src/modules/portal`. Валидация — Valibot через
+`@hono/standard-validator` с общим хуком `onInvalid` (`src/lib/validation.ts`); ошибки — `ApiError`
+(`src/lib/errors.ts`) в формате `{ error: { code, message } }`. Даты в API — ISO 8601 (`2026-10-07T18:00:00Z`).
+
+### Админка (`/api/admin`, cookie сессии)
+
+- `GET /students` (без архивных; `?archived=true` — все), `POST /students`, `GET|PATCH /students/:id`
+- `POST /students/:id/archive` — завершает правила, удаляет будущие немодифицированные занятия
+- `POST /students/:id/regenerate-token` — старая ссылка ученика перестаёт работать
+- `POST /series` `{ studentId, weekday, startTime, durationMin, timezone, startsOn }`
+- `POST /series/:id/change` `{ fromDate, weekday, startTime, durationMin, timezone }`, `POST /series/:id/end` `{ fromDate }`
+- `GET /lessons?from=&to=`, `GET /students/:id/lessons?from=&to=`
+- `POST /lessons` (разовое), `PATCH /lessons/:id` (перенос → `isModified`), `POST /lessons/:id/cancel|restore`
+
+### Ученик (`/api/s/:token`, без авторизации, только GET)
+
+- `GET /api/s/:token` → `{ name, grade, exam }`
+- `GET /api/s/:token/lessons?from=&to=` → `[{ id, startsAt, durationMin, status }]`
+
+### Как работает расписание
+
+- Правило (`lesson_series`) хранит день недели и время в поясе репетитора; занятия (`lessons`) материализуются
+  на 8 недель вперёд. Перевод в UTC — `@date-fns/tz`, поэтому при переходе на зимнее/летнее время локальное время
+  не сдвигается.
+- Генерация идемпотентна: unique `(series_id, original_starts_at)`.
+- Изменение/завершение правила и архивация трогают только будущие занятия с `is_modified = false`;
+  дата изменения не может быть в прошлом.
+- Cron Trigger `0 3 * * *` (`triggers` в `wrangler.jsonc`) раз в сутки догенерирует занятия.
+  Локально: `bunx wrangler dev --test-scheduled`, затем `curl "http://localhost:8787/__scheduled?cron=0+3+*+*+*"`.

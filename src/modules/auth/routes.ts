@@ -1,8 +1,11 @@
+import { sValidator } from '@hono/standard-validator';
 import { Hono } from 'hono';
 import { deleteCookie, setCookie } from 'hono/cookie';
 import { sign } from 'hono/jwt';
+import * as v from 'valibot';
 
 import { getDb } from '../../db';
+import { onInvalid } from '../../lib/validation';
 import { registerAttempt, resetAttempts } from './attempts';
 import { requireAuth } from './middleware';
 import { SESSION_COOKIE, SESSION_TTL_S } from './session';
@@ -12,22 +15,13 @@ const sha256 = (s: string) => crypto.subtle.digest('SHA-256', new TextEncoder().
 // Хеши одинаковой длины → timingSafeEqual не выдаёт длину секрета.
 const safeEqual = async (a: string, b: string) => crypto.subtle.timingSafeEqual(await sha256(a), await sha256(b));
 
-const isCredentials = (body: unknown): body is { login: string; password: string } =>
-  typeof body === 'object' &&
-  body !== null &&
-  'login' in body &&
-  typeof body.login === 'string' &&
-  'password' in body &&
-  typeof body.password === 'string';
+const credentials = v.object({ login: v.string(), password: v.string() });
 
 const isHttps = (url: string) => new URL(url).protocol === 'https:';
 
 export const authRoutes = new Hono<{ Bindings: Env }>()
-  .post('/login', async c => {
-    const body: unknown = await c.req.json().catch(() => null);
-    if (!isCredentials(body)) {
-      return c.json({ error: { code: 'invalid_body', message: 'Нужны строковые login и password' } }, 400);
-    }
+  .post('/login', sValidator('json', credentials, onInvalid), async c => {
+    const body = c.req.valid('json');
 
     const ip = c.req.header('cf-connecting-ip') ?? 'local';
     const db = getDb(c.env);

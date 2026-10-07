@@ -1,9 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 
-import type { getDb } from '../../db';
+import type { Db } from '../../db';
 import { loginAttempts as t } from './schema';
-
-type Db = ReturnType<typeof getDb>;
 
 const MAX_FAILURES = 5;
 const WINDOW_MS = 15 * 60 * 1000;

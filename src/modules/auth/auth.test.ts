@@ -1,12 +1,10 @@
-import { env, exports } from 'cloudflare:workers';
+import { env } from 'cloudflare:workers';
 import { sign } from 'hono/jwt';
 import { describe, expect, it } from 'vitest';
 
-const BASE = 'http://localhost/api';
-const ORIGIN = 'http://localhost:5173';
-const VALID = { login: env.ADMIN_LOGIN, password: env.ADMIN_PASSWORD };
+import { api as request, loginAsAdmin, ORIGIN } from '../../test/helpers';
 
-const request = (path: string, init?: RequestInit) => exports.default.fetch(`${BASE}${path}`, init);
+const VALID = { login: env.ADMIN_LOGIN, password: env.ADMIN_PASSWORD };
 
 // Свой IP на каждый тест — счётчики попыток не пересекаются.
 const login = (body: unknown, ip: string = crypto.randomUUID()) =>
@@ -16,10 +14,7 @@ const login = (body: unknown, ip: string = crypto.randomUUID()) =>
     body: JSON.stringify(body),
   });
 
-const sessionCookie = async () => {
-  const res = await login(VALID);
-  return res.headers.get('set-cookie')?.split(';')[0] ?? '';
-};
+const sessionCookie = async () => (await loginAsAdmin()).cookie;
 
 const makeJwt = (exp: number) => sign({ sub: 'admin', iat: exp - 60, exp }, env.JWT_SECRET, 'HS256');
 const nowS = () => Math.floor(Date.now() / 1000);
@@ -92,7 +87,7 @@ describe('/admin/*', () => {
   });
 
   it('с валидной cookie → 200', async () => {
-    const res = await request('/admin/students', { headers: { cookie: await sessionCookie() } });
+    const res = await request('/admin/students', { headers: { ...(await loginAsAdmin()) } });
     expect(res.status).toBe(200);
   });
 
@@ -104,7 +99,7 @@ describe('/admin/*', () => {
   it('POST с чужим Origin → 403', async () => {
     const res = await request('/admin/students', {
       method: 'POST',
-      headers: { origin: 'https://evil.example', cookie: await sessionCookie() },
+      headers: { ...(await loginAsAdmin()), origin: 'https://evil.example' },
     });
     expect(res.status).toBe(403);
   });

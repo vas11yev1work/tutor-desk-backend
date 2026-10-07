@@ -1,0 +1,33 @@
+import { sValidator } from '@hono/standard-validator';
+import { and, eq, isNull } from 'drizzle-orm';
+import { Hono } from 'hono';
+
+import { type Db, getDb } from '../../db';
+import { notFound } from '../../lib/errors';
+import { onInvalid, rangeQuery } from '../../lib/validation';
+import { listLessons } from '../schedule/service';
+import { students } from '../students/schema';
+
+/** Ученик по личному токену; неверный или архивный токен → 404. */
+const findStudent = async (db: Db, token: string) => {
+  const student = await db
+    .select({ id: students.id, name: students.name, grade: students.grade, exam: students.exam })
+    .from(students)
+    .where(and(eq(students.accessToken, token), isNull(students.archivedAt)))
+    .get();
+  if (!student) throw notFound('Ученик не найден');
+  return student;
+};
+
+/** Публичный контур ученика /api/s/:token — без cookie и auth-middleware, только GET. */
+export const portalRoutes = new Hono<{ Bindings: Env }>()
+  .get('/:token', async c => {
+    const { id: _id, ...profile } = await findStudent(getDb(c.env), c.req.param('token'));
+    return c.json(profile);
+  })
+  .get('/:token/lessons', sValidator('query', rangeQuery, onInvalid), async c => {
+    const db = getDb(c.env);
+    const { id } = await findStudent(db, c.req.param('token'));
+    const rows = await listLessons(db, { ...c.req.valid('query'), studentId: id });
+    return c.json(rows.map(l => ({ id: l.id, startsAt: l.startsAt, durationMin: l.durationMin, status: l.status })));
+  });

@@ -20,8 +20,12 @@
     "db:studio:local": "DB_LOCAL=1 drizzle-kit studio"
   },
   "dependencies": {
+    "@date-fns/tz": "^1.5.0",
+    "@hono/standard-validator": "^0.4.0",
     "drizzle-orm": "^0.45.3",
-    "hono": "^4.13.12"
+    "hono": "^4.13.12",
+    "nanoid": "^6.0.2",
+    "valibot": "^1.5.0"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.22.0",
