@@ -1,7 +1,7 @@
 CREATE TABLE `assignments` (
 	`id` text PRIMARY KEY NOT NULL,
 	`student_id` text NOT NULL,
-	`lesson_id` text,
+	`lesson_id` text NOT NULL,
 	`kind` text NOT NULL,
 	`file_name` text NOT NULL,
 	`size` integer NOT NULL,

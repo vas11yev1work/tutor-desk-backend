@@ -17,8 +17,10 @@ export const assignments = sqliteTable(
     studentId: text('student_id')
       .notNull()
       .references(() => students.id, { onDelete: 'cascade' }),
-    // Домашка всегда у занятия; пробник — у занятия или сам по себе.
-    lessonId: text('lesson_id').references(() => lessons.id, { onDelete: 'cascade' }),
+    // И домашка, и пробник выдаются к занятию; вкладка «Пробники» — выборка по kind.
+    lessonId: text('lesson_id')
+      .notNull()
+      .references(() => lessons.id, { onDelete: 'cascade' }),
     kind: text('kind', { enum: ASSIGNMENT_KINDS }).notNull(),
     fileName: text('file_name').notNull(),
     size: integer('size').notNull(),

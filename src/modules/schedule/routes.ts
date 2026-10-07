@@ -4,7 +4,7 @@ import * as v from 'valibot';
 
 import { getDb } from '../../db';
 import { isoDate, isoTimestamp, onInvalid, rangeQuery } from '../../lib/validation';
-import { readLessonUpload } from '../assignments/routes';
+import { readUpload } from '../assignments/routes';
 import { uploadToLesson } from '../assignments/service';
 import {
   changeSeries,
@@ -62,7 +62,7 @@ export const lessonsRoutes = new Hono<{ Bindings: Env }>()
   .post('/:id/cancel', async c => c.json(await setLessonStatus(getDb(c.env), c.req.param('id'), 'cancelled')))
   .post('/:id/restore', async c => c.json(await setLessonStatus(getDb(c.env), c.req.param('id'), 'scheduled')))
   .post('/:id/assignments', async c => {
-    const { file, kind } = await readLessonUpload(c);
+    const { file, kind } = await readUpload(c);
     return c.json(await uploadToLesson(getDb(c.env), c.env.FILES, c.req.param('id'), kind, file), 201);
   })
   .delete('/:id', async c => {

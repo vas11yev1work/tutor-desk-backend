@@ -24,7 +24,7 @@ const upload = (path: string, file: File, kind?: string) => {
   return api(path, { method: 'POST', headers: auth, body });
 };
 
-type Uploaded = { id: string; kind: string; lessonId: string | null; fileName: string; size: number };
+type Uploaded = { id: string; kind: string; lessonId: string; fileName: string; size: number };
 type ListedLesson = Lesson & { assignments: Uploaded[] };
 
 const uploadOk = async (path: string, file: File, kind?: string) => {
@@ -74,17 +74,23 @@ describe('задания: домашки и пробники', () => {
     ]);
   });
 
-  it('пробники: с занятием и без, нумерация по порядку загрузки', async () => {
+  it('пробники выдаются к занятиям; вкладка пробников нумерует их по порядку', async () => {
     const { student, lesson } = await setup();
+    const startsAt = new Date(Date.now() + 3 * DAY).toISOString();
+    const later = await (
+      await adminApi(auth, '/admin/lessons', {
+        method: 'POST',
+        body: { studentId: student.id, startsAt, durationMin: 60 },
+      })
+    ).json<Lesson>();
     const first = await uploadOk(`/admin/lessons/${lesson.id}/assignments`, pdf('П1.pdf'), 'mock');
-    const second = await uploadOk(`/admin/students/${student.id}/mocks`, pdf('П2.pdf'));
-    expect(second).toMatchObject({ kind: 'mock', lessonId: null });
     await uploadOk(`/admin/lessons/${lesson.id}/assignments`, pdf(), 'homework');
+    const second = await uploadOk(`/admin/lessons/${later.id}/assignments`, pdf('П2.pdf'), 'mock');
 
     const mocks = await (await adminApi(auth, `/admin/students/${student.id}/mocks`)).json<Uploaded[]>();
     expect(mocks).toMatchObject([
-      { id: first.id, number: 1 },
-      { id: second.id, number: 2 },
+      { id: first.id, number: 1, lessonId: lesson.id },
+      { id: second.id, number: 2, lessonId: later.id },
     ]);
     const portal = await (await api(`/s/${student.accessToken}/mocks`)).json();
     expect(portal).toMatchObject([
@@ -126,7 +132,6 @@ describe('задания: домашки и пробники', () => {
         'file_too_large',
       ],
       [upload('/admin/lessons/nope/assignments', pdf(), 'homework'), 404, 'not_found'],
-      [upload('/admin/students/nope/mocks', pdf()), 404, 'not_found'],
     ];
     for (const [req, status, code] of cases) {
       const res = await req;
@@ -151,9 +156,16 @@ describe('задания: домашки и пробники', () => {
   it('задания удаляются с занятием и учеником, cron чистит файлы без строк', async () => {
     const { student, lesson } = await setup();
     const hw = await uploadOk(`/admin/lessons/${lesson.id}/assignments`, pdf(), 'homework');
-    const mock = await uploadOk(`/admin/students/${student.id}/mocks`, pdf());
+    const startsAt = new Date(Date.now() + 3 * DAY).toISOString();
+    const other = await (
+      await adminApi(auth, '/admin/lessons', {
+        method: 'POST',
+        body: { studentId: student.id, startsAt, durationMin: 60 },
+      })
+    ).json<Lesson>();
+    const mock = await uploadOk(`/admin/lessons/${other.id}/assignments`, pdf(), 'mock');
     const keep = await setup();
-    const kept = await uploadOk(`/admin/students/${keep.student.id}/mocks`, pdf());
+    const kept = await uploadOk(`/admin/lessons/${keep.lesson.id}/assignments`, pdf(), 'mock');
 
     expect((await adminApi(auth, `/admin/lessons/${lesson.id}`, { method: 'DELETE' })).status).toBe(204);
     expect((await adminApi(auth, `/admin/assignments/${hw.id}/file`)).status).toBe(404);

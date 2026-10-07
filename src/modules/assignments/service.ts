@@ -4,7 +4,6 @@ import { nanoid } from 'nanoid';
 import type { Db } from '../../db';
 import { ApiError, notFound } from '../../lib/errors';
 import { lessons } from '../schedule/schema';
-import { students } from '../students/schema';
 import { type Assignment, assignments, fileKey, FILES_PREFIX } from './schema';
 
 export const MAX_FILE_MB = 20;
@@ -29,18 +28,6 @@ const assertPdf = async (file: File) => {
   if ((await file.slice(0, 5).text()) !== '%PDF-') throw new ApiError(400, 'not_pdf', 'Нужен PDF-файл');
 };
 
-const upload = async (
-  db: Db,
-  files: R2Bucket,
-  input: Pick<Assignment, 'studentId' | 'lessonId' | 'kind'>,
-  file: File,
-) => {
-  await assertPdf(file);
-  const row = { ...input, id: nanoid(), fileName: file.name || 'file.pdf', size: file.size };
-  await files.put(fileKey(row), file.stream(), { httpMetadata: { contentType: 'application/pdf' } });
-  return publicAssignment(await db.insert(assignments).values(row).returning().get());
-};
-
 export const uploadToLesson = async (
   db: Db,
   files: R2Bucket,
@@ -50,13 +37,17 @@ export const uploadToLesson = async (
 ) => {
   const lesson = await db.select({ studentId: lessons.studentId }).from(lessons).where(eq(lessons.id, lessonId)).get();
   if (!lesson) throw notFound('Занятие не найдено');
-  return upload(db, files, { studentId: lesson.studentId, lessonId, kind }, file);
-};
-
-export const uploadMock = async (db: Db, files: R2Bucket, studentId: string, file: File) => {
-  const student = await db.select({ id: students.id }).from(students).where(eq(students.id, studentId)).get();
-  if (!student) throw notFound('Ученик не найден');
-  return upload(db, files, { studentId, lessonId: null, kind: 'mock' }, file);
+  await assertPdf(file);
+  const row = {
+    id: nanoid(),
+    studentId: lesson.studentId,
+    lessonId,
+    kind,
+    fileName: file.name || 'file.pdf',
+    size: file.size,
+  };
+  await files.put(fileKey(row), file.stream(), { httpMetadata: { contentType: 'application/pdf' } });
+  return publicAssignment(await db.insert(assignments).values(row).returning().get());
 };
 
 /** Пробники ученика по порядку загрузки; number — «Пробник N». */

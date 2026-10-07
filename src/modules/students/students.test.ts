@@ -23,7 +23,6 @@ describe('админские эндпоинты без cookie → 401', () => {
     ['DELETE', '/admin/students/x'],
     ['POST', '/admin/students/x/regenerate-token'],
     ['GET', '/admin/students/x/mocks'],
-    ['POST', '/admin/students/x/mocks'],
     ['POST', '/admin/lessons/x/assignments'],
     ['GET', '/admin/assignments/x/file'],
     ['DELETE', '/admin/assignments/x'],

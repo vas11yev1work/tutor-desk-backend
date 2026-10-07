@@ -6,8 +6,7 @@ import * as v from 'valibot';
 import { type Db, getDb } from '../../db';
 import { notFound } from '../../lib/errors';
 import { onInvalid, rangeQuery } from '../../lib/validation';
-import { readUpload } from '../assignments/routes';
-import { listMocks, uploadMock } from '../assignments/service';
+import { listMocks } from '../assignments/service';
 import { deleteStudent, listActiveSeries, listLessons } from '../schedule/service';
 import { EXAMS, newAccessToken, students } from './schema';
 
@@ -64,10 +63,6 @@ export const studentsRoutes = new Hono<{ Bindings: Env }>()
     const db = getDb(c.env);
     const { id } = await getStudent(db, c.req.param('id'));
     return c.json(await listMocks(db, id));
-  })
-  .post('/:id/mocks', async c => {
-    const { file } = await readUpload(c);
-    return c.json(await uploadMock(getDb(c.env), c.env.FILES, c.req.param('id'), file), 201);
   })
   .get('/:id/series', async c => {
     const db = getDb(c.env);
