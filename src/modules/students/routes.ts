@@ -1,12 +1,12 @@
 import { sValidator } from '@hono/standard-validator';
-import { desc, eq, isNull } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import * as v from 'valibot';
 
 import { type Db, getDb } from '../../db';
 import { notFound } from '../../lib/errors';
 import { onInvalid, rangeQuery } from '../../lib/validation';
-import { archiveStudent, listLessons } from '../schedule/service';
+import { deleteStudent, listLessons } from '../schedule/service';
 import { EXAMS, newAccessToken, students } from './schema';
 
 const optionalText = (max: number) => v.optional(v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(max))));
@@ -26,19 +26,7 @@ const getStudent = async (db: Db, id: string) => {
 };
 
 export const studentsRoutes = new Hono<{ Bindings: Env }>()
-  .get(
-    '/',
-    sValidator('query', v.object({ archived: v.optional(v.picklist(['true', 'false'])) }), onInvalid),
-    async c => {
-      const all = c.req.valid('query').archived === 'true';
-      const rows = await getDb(c.env)
-        .select()
-        .from(students)
-        .where(all ? undefined : isNull(students.archivedAt))
-        .orderBy(desc(students.createdAt));
-      return c.json(rows);
-    },
-  )
+  .get('/', async c => c.json(await getDb(c.env).select().from(students).orderBy(desc(students.createdAt))))
   .post('/', sValidator('json', v.object(studentFields), onInvalid), async c =>
     c.json(await getDb(c.env).insert(students).values(c.req.valid('json')).returning().get(), 201),
   )
@@ -52,7 +40,10 @@ export const studentsRoutes = new Hono<{ Bindings: Env }>()
     if (!student) throw notFound('Ученик не найден');
     return c.json(student);
   })
-  .post('/:id/archive', async c => c.json(await archiveStudent(getDb(c.env), c.req.param('id'), Date.now())))
+  .delete('/:id', async c => {
+    await deleteStudent(getDb(c.env), c.req.param('id'));
+    return c.body(null, 204);
+  })
   .post('/:id/regenerate-token', async c => {
     const [student] = await getDb(c.env)
       .update(students)

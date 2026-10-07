@@ -75,7 +75,7 @@ describe('расписание через API', () => {
     expect(left.map(l => l.id)).toContain(oneOff.id);
   });
 
-  it('ошибки: дата в прошлом → 400, архивный ученик → 409, неизвестный пояс → 400', async () => {
+  it('ошибки: дата в прошлом → 400, удалённый ученик → 404, неизвестный пояс → 400', async () => {
     const student = await post<Student>('/admin/students', { name: 'Ира' });
     const series = await post<Series>('/admin/series', { studentId: student.id, startsOn: tomorrow(), ...rule });
 
@@ -92,8 +92,7 @@ describe('расписание через API', () => {
     });
     expect(badTz.status).toBe(400);
 
-    await post(`/admin/students/${student.id}/archive`, undefined, 200);
-    expect(await listForStudent(student.id)).toEqual([]);
+    expect((await adminApi(auth, `/admin/students/${student.id}`, { method: 'DELETE' })).status).toBe(204);
 
     const conflicts = [
       adminApi(auth, '/admin/series', {
@@ -106,8 +105,7 @@ describe('расписание через API', () => {
       }),
     ];
     for (const res of await Promise.all(conflicts)) {
-      expect(res.status).toBe(409);
-      expect(await res.json()).toMatchObject({ error: { code: 'student_archived' } });
+      expect(res.status).toBe(404);
     }
   });
 });

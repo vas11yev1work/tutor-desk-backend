@@ -20,7 +20,7 @@ describe('админские эндпоинты без cookie → 401', () => {
     ['POST', '/admin/students'],
     ['GET', '/admin/students/x'],
     ['PATCH', '/admin/students/x'],
-    ['POST', '/admin/students/x/archive'],
+    ['DELETE', '/admin/students/x'],
     ['POST', '/admin/students/x/regenerate-token'],
     ['POST', '/admin/series'],
     ['POST', '/admin/series/x/change'],
@@ -39,7 +39,7 @@ describe('админские эндпоинты без cookie → 401', () => {
 describe('ученики', () => {
   it('создание, чтение, изменение', async () => {
     const created = await createStudent({ grade: 9, exam: 'oge', contact: '@masha', notes: 'любит геометрию' });
-    expect(created).toMatchObject({ name: 'Маша', grade: 9, exam: 'oge', archivedAt: null });
+    expect(created).toMatchObject({ name: 'Маша', grade: 9, exam: 'oge' });
     expect(created.accessToken).toHaveLength(24);
 
     const got = await adminApi(auth, `/admin/students/${created.id}`);
@@ -67,18 +67,16 @@ describe('ученики', () => {
     expect(await res.json()).toMatchObject({ error: { code: 'not_found' } });
   });
 
-  it('архивные скрыты из списка, ?archived=true показывает все', async () => {
-    const active = await createStudent();
-    const archived = await createStudent();
-    const res = await adminApi(auth, `/admin/students/${archived.id}/archive`, { method: 'POST' });
-    expect(res.status).toBe(200);
-    expect((await res.json<Student>()).archivedAt).not.toBeNull();
+  it('удаление: 204, ученик пропадает из списка, повторно → 404', async () => {
+    const kept = await createStudent();
+    const deleted = await createStudent();
+    const del = () => adminApi(auth, `/admin/students/${deleted.id}`, { method: 'DELETE' });
+    expect((await del()).status).toBe(204);
+    expect((await del()).status).toBe(404);
 
-    const ids = async (query: string) =>
-      (await (await adminApi(auth, `/admin/students${query}`)).json<Student[]>()).map(s => s.id);
-    expect(await ids('')).toContain(active.id);
-    expect(await ids('')).not.toContain(archived.id);
-    expect(await ids('?archived=true')).toEqual(expect.arrayContaining([active.id, archived.id]));
+    const ids = (await (await adminApi(auth, '/admin/students')).json<Student[]>()).map(s => s.id);
+    expect(ids).toContain(kept.id);
+    expect(ids).not.toContain(deleted.id);
   });
 
   it('regenerate-token выдаёт новый токен', async () => {

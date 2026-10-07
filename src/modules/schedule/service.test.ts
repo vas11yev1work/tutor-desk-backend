@@ -7,10 +7,10 @@ import { getDb } from '../../db';
 import { students } from '../students/schema';
 import { lessons, lessonSeries } from './schema';
 import {
-  archiveStudent,
   changeSeries,
   createLesson,
   createSeries,
+  deleteStudent,
   endSeries,
   generateAll,
   updateLesson,
@@ -163,20 +163,16 @@ describe('изменения', () => {
     expect(ended?.endsOn).toBe('2026-11-15');
   });
 
-  it('архивация ученика завершает правила и чистит будущие занятия', async () => {
+  it('удаление ученика стирает правила и все занятия', async () => {
     const { id: studentId } = await newStudent();
     const series = await wednesdays(studentId);
     await createLesson(db, { studentId, startsAt: new Date('2026-11-10T10:00:00Z'), durationMin: 60 });
 
-    // Через неделю: занятие 04.11 уже прошло и должно остаться.
-    const later = Date.parse('2026-11-09T08:00:00Z');
-    const archived = await archiveStudent(db, studentId, later);
-    await generateAll(db, later);
+    await deleteStudent(db, studentId);
+    await generateAll(db, NOW);
 
-    expect(archived?.archivedAt).toEqual(new Date(later));
-    const ended = await db.select().from(lessonSeries).where(eq(lessonSeries.id, series.id)).get();
-    expect(ended?.endsOn).toBe('2026-11-08');
-    const left = await studentLessons(studentId);
-    expect(left.map(l => l.startsAt.toISOString())).toEqual(['2026-11-04T17:00:00.000Z']);
+    expect(await db.select().from(students).where(eq(students.id, studentId)).get()).toBeUndefined();
+    expect(await db.select().from(lessonSeries).where(eq(lessonSeries.id, series.id)).get()).toBeUndefined();
+    expect(await studentLessons(studentId)).toEqual([]);
   });
 });

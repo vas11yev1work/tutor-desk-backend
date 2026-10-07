@@ -47,7 +47,7 @@ describe('/api/s/:token', () => {
     ]);
   });
 
-  it('неверный, архивный и старый токен → 404', async () => {
+  it('неверный, старый токен и удалённый ученик → 404', async () => {
     const { student } = await studentWithLesson('Дима');
     expect((await api('/s/wrong-token')).status).toBe(404);
     expect((await api(`/s/wrong-token/lessons?${range}`)).status).toBe(404);
@@ -58,7 +58,7 @@ describe('/api/s/:token', () => {
     expect((await api(`/s/${student.accessToken}`)).status).toBe(404);
     expect((await api(`/s/${regenerated.accessToken}`)).status).toBe(200);
 
-    await adminApi(auth, `/admin/students/${student.id}/archive`, { method: 'POST' });
+    await adminApi(auth, `/admin/students/${student.id}`, { method: 'DELETE' });
     expect((await api(`/s/${regenerated.accessToken}`)).status).toBe(404);
   });
 

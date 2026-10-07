@@ -18,8 +18,6 @@ export const students = sqliteTable('students', {
   notes: text('notes'),
   // Личная ссылка ученика: /api/s/:token.
   accessToken: text('access_token').notNull().unique().$defaultFn(newAccessToken),
-  // Учеников не удаляем, архивируем.
-  archivedAt: integer('archived_at', { mode: 'timestamp_ms' }),
   ...timestamps,
 });
 

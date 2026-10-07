@@ -1,5 +1,5 @@
 import { sValidator } from '@hono/standard-validator';
-import { and, eq, isNull } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 
 import { type Db, getDb } from '../../db';
@@ -8,12 +8,12 @@ import { onInvalid, rangeQuery } from '../../lib/validation';
 import { listLessons } from '../schedule/service';
 import { students } from '../students/schema';
 
-/** Ученик по личному токену; неверный или архивный токен → 404. */
+/** Ученик по личному токену; неверный токен или удалённый ученик → 404. */
 const findStudent = async (db: Db, token: string) => {
   const student = await db
     .select({ id: students.id, name: students.name, grade: students.grade, exam: students.exam })
     .from(students)
-    .where(and(eq(students.accessToken, token), isNull(students.archivedAt)))
+    .where(eq(students.accessToken, token))
     .get();
   if (!student) throw notFound('Ученик не найден');
   return student;

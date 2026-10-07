@@ -55,11 +55,9 @@ const assertNotPast = (date: string, tz: string, now: number) => {
   if (date < localDate(now, tz)) throw new ApiError(400, 'date_in_past', 'Дата не может быть в прошлом');
 };
 
-export const assertActiveStudent = async (db: Db, studentId: string) => {
-  const student = await db.select().from(students).where(eq(students.id, studentId)).get();
+const assertStudent = async (db: Db, studentId: string) => {
+  const student = await db.select({ id: students.id }).from(students).where(eq(students.id, studentId)).get();
   if (!student) throw notFound('Ученик не найден');
-  if (student.archivedAt) throw new ApiError(409, 'student_archived', 'Ученик в архиве');
-  return student;
 };
 
 const getActiveSeries = async (db: Db, seriesId: string, fromDate: string, now: number) => {
@@ -83,7 +81,7 @@ export const generateAll = async (db: Db, now: number) => {
 };
 
 export const createSeries = async (db: Db, input: Rule & Pick<Series, 'studentId' | 'startsOn'>, now: number) => {
-  await assertActiveStudent(db, input.studentId);
+  await assertStudent(db, input.studentId);
   const series: SeriesDraft = { ...input, id: nanoid(), endsOn: null };
   await runBatch(db, [
     db.insert(lessonSeries).values(series),
@@ -100,7 +98,6 @@ export const createSeries = async (db: Db, input: Rule & Pick<Series, 'studentId
 export const changeSeries = async (db: Db, seriesId: string, input: Rule & { fromDate: string }, now: number) => {
   const { fromDate, ...rule } = input;
   const old = await getActiveSeries(db, seriesId, fromDate, now);
-  await assertActiveStudent(db, old.studentId);
 
   const next: SeriesDraft = { ...rule, id: nanoid(), studentId: old.studentId, startsOn: fromDate, endsOn: old.endsOn };
   const reusable = await db
@@ -161,34 +158,14 @@ export const endSeries = async (db: Db, seriesId: string, fromDate: string, now:
   await runBatch(db, endSeriesQueries(db, series, fromDate, now));
 };
 
-/** Архивация: правила завершаются сегодняшним днём, будущие немодифицированные занятия удаляются. */
-export const archiveStudent = async (db: Db, studentId: string, now: number) => {
-  const student = await db.select().from(students).where(eq(students.id, studentId)).get();
-  if (!student) throw notFound('Ученик не найден');
-  if (student.archivedAt) return student;
-
-  const series = await db.select().from(lessonSeries).where(eq(lessonSeries.studentId, studentId));
-  const active = series.filter(s => !s.endsOn || s.endsOn >= localDate(now, s.timezone));
-
-  await runBatch(db, [
-    db
-      .update(students)
-      .set({ archivedAt: new Date(now) })
-      .where(eq(students.id, studentId)),
-    // ends_on = вчера, чтобы cron не догенерировал сегодняшние занятия.
-    ...active.map(s =>
-      db
-        .update(lessonSeries)
-        .set({ endsOn: addDays(localDate(now, s.timezone), -1) })
-        .where(eq(lessonSeries.id, s.id)),
-    ),
-    db
-      .delete(lessons)
-      .where(
-        and(eq(lessons.studentId, studentId), gte(lessons.startsAt, new Date(now)), eq(lessons.isModified, false)),
-      ),
+/** Удаление ученика навсегда: вместе со всеми правилами и занятиями, включая прошедшие. */
+export const deleteStudent = async (db: Db, studentId: string) => {
+  await assertStudent(db, studentId);
+  await db.batch([
+    db.delete(lessons).where(eq(lessons.studentId, studentId)),
+    db.delete(lessonSeries).where(eq(lessonSeries.studentId, studentId)),
+    db.delete(students).where(eq(students.id, studentId)),
   ]);
-  return db.select().from(students).where(eq(students.id, studentId)).get();
 };
 
 export const listLessons = (db: Db, range: { from: Date; to: Date; studentId?: string }) =>
@@ -215,7 +192,7 @@ export const listLessons = (db: Db, range: { from: Date; to: Date; studentId?: s
     .orderBy(asc(lessons.startsAt));
 
 export const createLesson = async (db: Db, input: Pick<Lesson, 'studentId' | 'startsAt' | 'durationMin'>) => {
-  await assertActiveStudent(db, input.studentId);
+  await assertStudent(db, input.studentId);
   return db.insert(lessons).values(input).returning().get();
 };
 
@@ -231,8 +208,7 @@ export const updateLesson = async (db: Db, id: string, patch: Partial<Pick<Lesso
 };
 
 export const setLessonStatus = async (db: Db, id: string, status: Lesson['status']) => {
-  const lesson = await db.select().from(lessons).where(eq(lessons.id, id)).get();
+  const [lesson] = await db.update(lessons).set({ status }).where(eq(lessons.id, id)).returning();
   if (!lesson) throw notFound('Занятие не найдено');
-  if (status === 'scheduled') await assertActiveStudent(db, lesson.studentId);
-  return db.update(lessons).set({ status }).where(eq(lessons.id, id)).returning().get();
+  return lesson;
 };
