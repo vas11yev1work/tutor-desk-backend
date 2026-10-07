@@ -13,6 +13,7 @@ import {
   deleteStudent,
   endSeries,
   generateAll,
+  listActiveSeries,
   listLessons,
   updateLesson,
 } from './service';
@@ -175,6 +176,21 @@ describe('изменения', () => {
       (await listLessons(db, { from: new Date(from), to: new Date(to), studentId })).map(l => l.id);
     expect(await week('2026-11-02T00:00:00Z', '2026-11-09T00:00:00Z')).toEqual([first.id]);
     expect(await week('2026-11-09T00:00:00Z', '2026-11-16T00:00:00Z')).toContain(first.id);
+  });
+
+  it('активные правила: завершённые скрыты, будущее после изменения видно', async () => {
+    const { id: studentId } = await newStudent();
+    const series = await wednesdays(studentId);
+    const next = await changeSeries(
+      db,
+      series.id,
+      { fromDate: '2026-11-16', weekday: 5, startTime: '17:00', durationMin: 60, timezone: ROME },
+      NOW,
+    );
+
+    const ids = async (now: number) => (await listActiveSeries(db, studentId, now)).map(s => s.id);
+    expect(await ids(NOW)).toEqual([series.id, next?.id]);
+    expect(await ids(Date.parse('2026-11-16T08:00:00Z'))).toEqual([next?.id]);
   });
 
   it('удаление ученика стирает правила и все занятия', async () => {

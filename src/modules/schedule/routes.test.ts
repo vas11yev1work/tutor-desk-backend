@@ -68,6 +68,10 @@ describe('расписание через API', () => {
     const next = await post<Series>(`/admin/series/${series.id}/change`, { fromDate, ...rule, weekday: 4 });
     expect(next).toMatchObject({ startsOn: fromDate, weekday: 4 });
 
+    const active = await (await adminApi(auth, `/admin/students/${student.id}/series`)).json<Series[]>();
+    expect(active.map(s => s.id)).toEqual([series.id, next.id]);
+    expect((await adminApi(auth, '/admin/students/nope/series')).status).toBe(404);
+
     const ended = await adminApi(auth, `/admin/series/${next.id}/end`, { method: 'POST', body: { fromDate } });
     expect(ended.status).toBe(204);
     const left = await listForStudent(student.id);

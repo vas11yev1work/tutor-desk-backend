@@ -168,6 +168,16 @@ export const deleteStudent = async (db: Db, studentId: string) => {
   ]);
 };
 
+/** Правила ученика, которые ещё действуют (ends_on не раньше сегодня), включая начинающиеся в будущем. */
+export const listActiveSeries = async (db: Db, studentId: string, now: number) => {
+  const rows = await db
+    .select()
+    .from(lessonSeries)
+    .where(eq(lessonSeries.studentId, studentId))
+    .orderBy(asc(lessonSeries.weekday), asc(lessonSeries.startTime), asc(lessonSeries.startsOn));
+  return rows.filter(s => !s.endsOn || s.endsOn >= localDate(now, s.timezone));
+};
+
 /** Занятия, у которых в диапазон попадает startsAt или originalStartsAt: перенесённое видно в обоих днях. */
 export const listLessons = (db: Db, range: { from: Date; to: Date; studentId?: string }) =>
   db

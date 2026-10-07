@@ -6,7 +6,7 @@ import * as v from 'valibot';
 import { type Db, getDb } from '../../db';
 import { notFound } from '../../lib/errors';
 import { onInvalid, rangeQuery } from '../../lib/validation';
-import { deleteStudent, listLessons } from '../schedule/service';
+import { deleteStudent, listActiveSeries, listLessons } from '../schedule/service';
 import { EXAMS, newAccessToken, students } from './schema';
 
 const optionalText = (max: number) => v.optional(v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(max))));
@@ -57,4 +57,9 @@ export const studentsRoutes = new Hono<{ Bindings: Env }>()
     const db = getDb(c.env);
     const { id } = await getStudent(db, c.req.param('id'));
     return c.json(await listLessons(db, { ...c.req.valid('query'), studentId: id }));
+  })
+  .get('/:id/series', async c => {
+    const db = getDb(c.env);
+    const { id } = await getStudent(db, c.req.param('id'));
+    return c.json(await listActiveSeries(db, id, Date.now()));
   });
