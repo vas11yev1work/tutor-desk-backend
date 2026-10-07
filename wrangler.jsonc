@@ -7,6 +7,10 @@
   "observability": {
     "enabled": true,
   },
+  "vars": {
+    // Origin'ы фронта для CSRF-проверки (hono/csrf), через запятую. Перед деплоем добавить прод-домен.
+    "ALLOWED_ORIGINS": "http://localhost:5173",
+  },
   "r2_buckets": [
     {
       "binding": "FILES",

@@ -12,6 +12,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check-types": "tsc --noEmit",
+    "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply tutor-desk-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply tutor-desk-db --remote",
@@ -23,6 +24,7 @@
     "hono": "^4.13.12"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
     "@eslint/js": "^10.0.1",
     "@libsql/client": "^0.18.0",
     "@types/node": "22",
@@ -34,6 +36,7 @@
     "prettier": "^3.9.9",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.71.0",
+    "vitest": "^4.1",
     "wrangler": "^4.0.0"
   },
   "engines": {

@@ -1,8 +1,3 @@
-import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
-
-export const students = sqliteTable('students', {
-  id: text()
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  name: text().notNull(),
-});
+// Таблицы живут в модулях; здесь только сборка для drizzle(…, { schema }) и drizzle-kit.
+export * from '../../modules/auth/schema';
+export * from '../../modules/students/schema';

@@ -2,6 +2,8 @@
 
 API кабинета репетитора: Hono на Cloudflare Workers, файлы в R2, база в D1 (Drizzle ORM).
 
+Код разбит по фичам: `src/modules/<фича>/` (роуты, схема, middleware, тесты).
+
 ## Команды
 
 - `bun install` — поставить зависимости
@@ -11,6 +13,7 @@ API кабинета репетитора: Hono на Cloudflare Workers, фай�
 - `bun lint` / `bun lint:fix` — ESLint
 - `bun format` / `bun format:check` — Prettier
 - `bun check-types` — tsc
+- `bun run test` — тесты (vitest в рантайме Workers; не `bun test`)
 - `bun db:generate` — сгенерировать SQL-миграцию в `drizzle/` из `src/db/schema`
 - `bun db:migrate:local` / `bun db:migrate:remote` — применить миграции к локальной / продовой D1
 - `bun db:studio` — Drizzle Studio против продовой D1
@@ -21,13 +24,14 @@ API кабинета репетитора: Hono на Cloudflare Workers, фай�
 1. `bunx wrangler login`
 2. `bunx wrangler r2 bucket create tutor-desk-files`
 3. Создать D1 (см. «База данных») и применить миграции: `bun db:migrate:remote`
-4. `bun run deploy`
+4. Задать секреты (см. «Авторизация») и добавить прод-домен фронта в `vars.ALLOWED_ORIGINS`
+5. `bun run deploy`
 
 Проверка: `GET /api/health` → `{ "status": "ok" }`.
 
 ## База данных (D1 + Drizzle)
 
-Схема живёт в `src/db/schema`, клиент — `getDb(c.env)` из `src/db`.
+Таблицы живут в модулях (`src/modules/*/schema.ts`) и собираются в `src/db/schema/index.ts` — новую таблицу нужно туда реэкспортировать. Клиент — `getDb(c.env)` из `src/db`.
 
 ### Создать базу (один раз)
 
@@ -37,7 +41,7 @@ API кабинета репетитора: Hono на Cloudflare Workers, фай�
 
 ### Миграции
 
-1. Поменять схему в `src/db/schema`
+1. Поменять схему в `src/modules/*/schema.ts`
 2. `bun db:generate` — появится новый файл в `drizzle/` (коммитить его)
 3. `bun db:migrate:local` — применить к локальной базе `wrangler dev` (`.wrangler/state`)
 4. `bun db:migrate:remote` — применить к продовой базе перед деплоем
@@ -61,3 +65,26 @@ API кабинета репетитора: Hono на Cloudflare Workers, фай�
 - JSON → `text({ mode: 'json' })`
 - даты → `integer({ mode: 'timestamp_ms' })`
 - нет интерактивных транзакций → `db.batch([...])`
+
+## Авторизация
+
+Один администратор (репетитор), без таблицы пользователей. Код — `src/modules/auth`.
+
+- `POST /api/auth/login` `{ login, password }` → 204 + cookie `session` (JWT HS256, 30 дней, HttpOnly, SameSite=Lax, Secure на https)
+- `GET /api/auth/me` → `{ authenticated: true }` или 401
+- `POST /api/auth/logout` → 204, cookie удалена
+- `/api/admin/*` требует cookie; без неё — 401 `{ error: { code: 'unauthorized' } }`
+- Изменяющие запросы на `/api/admin/*` и `/api/auth/*` проверяются по Origin (`vars.ALLOWED_ORIGINS` в `wrangler.jsonc`, через запятую)
+- Перебор: 5 неудач с одного IP за 15 минут → блокировка на 15 минут (429 + `Retry-After`), таблица `login_attempts`
+
+### Секреты
+
+Локально — в `.dev.vars` (шаблон `.dev.vars.example`). В проде, каждый по разу:
+
+```sh
+bunx wrangler secret put ADMIN_LOGIN
+bunx wrangler secret put ADMIN_PASSWORD
+bunx wrangler secret put JWT_SECRET   # значение: openssl rand -base64 48
+```
+
+Смена `JWT_SECRET` разлогинивает все сессии.
