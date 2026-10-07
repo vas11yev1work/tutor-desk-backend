@@ -24,7 +24,7 @@ const upload = (path: string, file: File, kind?: string) => {
   return api(path, { method: 'POST', headers: auth, body });
 };
 
-type Uploaded = { id: string; kind: string; lessonId: string; fileName: string; size: number };
+type Uploaded = { id: string; kind: string; lessonId: string; fileName: string; size: number; total: number | null };
 type ListedLesson = Lesson & { assignments: Uploaded[] };
 
 const uploadOk = async (path: string, file: File, kind?: string) => {
@@ -33,9 +33,9 @@ const uploadOk = async (path: string, file: File, kind?: string) => {
   return res.json<Uploaded>();
 };
 
-const setup = async () => {
+const setup = async (exam: string | null = 'oge') => {
   const student = await (
-    await adminApi(auth, '/admin/students', { method: 'POST', body: { name: 'Маша' } })
+    await adminApi(auth, '/admin/students', { method: 'POST', body: { name: 'Маша', exam } })
   ).json<Student>();
   const startsAt = new Date(Date.now() + 2 * DAY).toISOString();
   const lesson = await (
@@ -99,6 +99,67 @@ describe('задания: домашки и пробники', () => {
     ]);
   });
 
+  it('оценка пробника: баллы по номерам, итог, комментарий; снять оценку', async () => {
+    const student = await (
+      await adminApi(auth, '/admin/students', { method: 'POST', body: { name: 'Артём', exam: 'ege_profile' } })
+    ).json<Student>();
+    const startsAt = new Date(Date.now() + 2 * DAY).toISOString();
+    const lesson = await (
+      await adminApi(auth, '/admin/lessons', {
+        method: 'POST',
+        body: { studentId: student.id, startsAt, durationMin: 60 },
+      })
+    ).json<Lesson>();
+    const mock = await uploadOk(`/admin/lessons/${lesson.id}/assignments`, pdf(), 'mock');
+    const score = (id: string, body: unknown) =>
+      adminApi(auth, `/admin/assignments/${id}/score`, { method: 'PUT', body });
+
+    const scores = [...Array<number>(12).fill(1), 2, 3, 0, 1, 0, 4, 0];
+    const res = await score(mock.id, { scores, comment: 'в №15 перепутал знак' });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ scores, total: 22, comment: 'в №15 перепутал знак' });
+    const [listed] = await (await adminApi(auth, `/admin/students/${student.id}/mocks`)).json<Uploaded[]>();
+    expect(listed).toMatchObject({ scores, total: 22, comment: 'в №15 перепутал знак' });
+
+    for (const [body, code] of [
+      [{ scores: scores.slice(1) }, 'invalid_scores'],
+      [{ scores: scores.map((s, i) => (i === 17 ? 5 : s)) }, 'invalid_scores'],
+      [{ scores: scores.map((s, i) => (i === 0 ? -1 : s)) }, 'validation_error'],
+    ] as const) {
+      const bad = await score(mock.id, body);
+      expect(bad.status).toBe(400);
+      expect(await bad.json()).toMatchObject({ error: { code } });
+    }
+
+    expect(await (await score(mock.id, { scores: null })).json()).toMatchObject({
+      scores: null,
+      total: null,
+      comment: 'в №15 перепутал знак',
+    });
+
+    const hw = await uploadOk(`/admin/lessons/${lesson.id}/assignments`, pdf(), 'homework');
+    const noExam = await setup();
+    const noExamMock = await uploadOk(`/admin/lessons/${noExam.lesson.id}/assignments`, pdf(), 'mock');
+    await adminApi(auth, `/admin/students/${noExam.student.id}`, { method: 'PATCH', body: { exam: null } });
+    for (const [id, status, code] of [
+      [hw.id, 409, 'not_mock'],
+      [noExamMock.id, 409, 'no_exam'],
+      ['nope', 404, 'not_found'],
+    ] as const) {
+      const res = await score(id, { scores: null });
+      expect(res.status).toBe(status);
+      expect(await res.json()).toMatchObject({ error: { code } });
+    }
+  });
+
+  it('максимумы баллов по экзаменам', async () => {
+    const exams = await (await adminApi(auth, '/admin/exams')).json<Record<string, number[]>>();
+    const totals = Object.fromEntries(
+      Object.entries(exams).map(([k, v]) => [k, [v.length, v.reduce((a, b) => a + b)]]),
+    );
+    expect(totals).toEqual({ oge: [25, 31], ege_base: [21, 21], ege_profile: [19, 32] });
+  });
+
   it('скачивание: PDF inline для админа и своего ученика, чужому — 404', async () => {
     const { student, lesson } = await setup();
     const other = await setup();
@@ -132,6 +193,7 @@ describe('задания: домашки и пробники', () => {
         'file_too_large',
       ],
       [upload('/admin/lessons/nope/assignments', pdf(), 'homework'), 404, 'not_found'],
+      [upload(`/admin/lessons/${(await setup(null)).lesson.id}/assignments`, pdf(), 'mock'), 409, 'no_exam'],
     ];
     for (const [req, status, code] of cases) {
       const res = await req;

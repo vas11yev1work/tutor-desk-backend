@@ -24,6 +24,9 @@ export const assignments = sqliteTable(
     kind: text('kind', { enum: ASSIGNMENT_KINDS }).notNull(),
     fileName: text('file_name').notNull(),
     size: integer('size').notNull(),
+    // Только у пробника: первичные баллы по номерам заданий; null — ещё не проверен.
+    scores: text('scores', { mode: 'json' }).$type<number[]>(),
+    comment: text('comment'),
     ...timestamps,
   },
   t => [index('assignments_lesson_idx').on(t.lessonId), index('assignments_student_idx').on(t.studentId)],

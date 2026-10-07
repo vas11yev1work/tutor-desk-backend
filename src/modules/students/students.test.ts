@@ -26,6 +26,8 @@ describe('админские эндпоинты без cookie → 401', () => {
     ['POST', '/admin/lessons/x/assignments'],
     ['GET', '/admin/assignments/x/file'],
     ['DELETE', '/admin/assignments/x'],
+    ['PUT', '/admin/assignments/x/score'],
+    ['GET', '/admin/exams'],
     ['GET', '/admin/students/x/series'],
     ['POST', '/admin/series'],
     ['POST', '/admin/series/x/change'],

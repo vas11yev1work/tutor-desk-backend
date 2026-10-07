@@ -4,9 +4,13 @@ import { nanoid } from 'nanoid';
 import type { Db } from '../../db';
 import { ApiError, notFound } from '../../lib/errors';
 import { lessons } from '../schedule/schema';
+import { students } from '../students/schema';
 import { type Assignment, assignments, fileKey, FILES_PREFIX } from './schema';
+import { EXAM_MAX_SCORES, sum } from './scores';
 
 export const MAX_FILE_MB = 20;
+
+const noExam = () => new ApiError(409, 'no_exam', 'У ученика не выбран экзамен');
 /** Файлы моложе часа cron не трогает: строка в БД пишется после загрузки в R2. */
 const ORPHAN_GRACE_MS = 60 * 60 * 1000;
 
@@ -18,6 +22,9 @@ export const publicAssignment = (a: Assignment) => ({
   fileName: a.fileName,
   size: a.size,
   createdAt: a.createdAt,
+  scores: a.scores,
+  total: a.scores ? sum(a.scores) : null,
+  comment: a.comment,
 });
 
 const assertPdf = async (file: File) => {
@@ -35,8 +42,14 @@ export const uploadToLesson = async (
   kind: Assignment['kind'],
   file: File,
 ) => {
-  const lesson = await db.select({ studentId: lessons.studentId }).from(lessons).where(eq(lessons.id, lessonId)).get();
+  const lesson = await db
+    .select({ studentId: lessons.studentId, exam: students.exam })
+    .from(lessons)
+    .innerJoin(students, eq(students.id, lessons.studentId))
+    .where(eq(lessons.id, lessonId))
+    .get();
   if (!lesson) throw notFound('Занятие не найдено');
+  if (kind === 'mock' && !lesson.exam) throw noExam();
   await assertPdf(file);
   const row = {
     id: nanoid(),
@@ -59,6 +72,31 @@ export const listMocks = async (db: Db, studentId: string) => {
     .where(and(eq(assignments.studentId, studentId), eq(assignments.kind, 'mock')))
     .orderBy(asc(assignments.createdAt), asc(assignments.id));
   return rows.map((r, i) => ({ ...publicAssignment(r.assignment), lessonStartsAt: r.lessonStartsAt, number: i + 1 }));
+};
+
+/** Баллы пробника по номерам заданий экзамена ученика; scores: null — снять оценку. */
+export const scoreMock = async (db: Db, id: string, input: { scores: number[] | null; comment?: string | null }) => {
+  const row = await db
+    .select({ kind: assignments.kind, exam: students.exam })
+    .from(assignments)
+    .innerJoin(students, eq(students.id, assignments.studentId))
+    .where(eq(assignments.id, id))
+    .get();
+  if (!row) throw notFound('Задание не найдено');
+  if (row.kind !== 'mock') throw new ApiError(409, 'not_mock', 'Баллы ставятся только пробнику');
+  // Экзамен могли убрать из профиля уже после выдачи пробника.
+  if (!row.exam) throw noExam();
+  const max = EXAM_MAX_SCORES[row.exam];
+  if (input.scores && (input.scores.length !== max.length || input.scores.some((s, i) => s > (max[i] ?? 0)))) {
+    throw new ApiError(400, 'invalid_scores', `Нужно ${max.length} баллов, максимум по номерам: ${max.join(', ')}`);
+  }
+  const [updated] = await db
+    .update(assignments)
+    .set({ scores: input.scores, ...(input.comment === undefined ? {} : { comment: input.comment }) })
+    .where(eq(assignments.id, id))
+    .returning();
+  if (!updated) throw notFound('Задание не найдено');
+  return publicAssignment(updated);
 };
 
 export const deleteAssignment = async (db: Db, files: R2Bucket, id: string) => {

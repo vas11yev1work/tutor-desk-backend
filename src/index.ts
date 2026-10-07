@@ -5,6 +5,7 @@ import { HTTPException } from 'hono/http-exception';
 import { getDb } from './db';
 import { ApiError } from './lib/errors';
 import { assignmentsRoutes } from './modules/assignments/routes';
+import { EXAM_MAX_SCORES } from './modules/assignments/scores';
 import { sweepOrphanFiles } from './modules/assignments/service';
 import { csrfProtection, requireAuth } from './modules/auth/middleware';
 import { authRoutes } from './modules/auth/routes';
@@ -32,6 +33,8 @@ app.route('/admin/students', studentsRoutes);
 app.route('/admin/series', seriesRoutes);
 app.route('/admin/lessons', lessonsRoutes);
 app.route('/admin/assignments', assignmentsRoutes);
+// Максимальные баллы по номерам заданий — для формы оценки пробника.
+app.get('/admin/exams', c => c.json(EXAM_MAX_SCORES));
 // Публичный контур ученика: вне /admin, поэтому auth и csrf на него не действуют.
 app.route('/s', portalRoutes);
 
