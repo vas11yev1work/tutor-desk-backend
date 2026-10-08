@@ -14,6 +14,7 @@ import { mcpRoutes } from './modules/mcp/routes';
 import { portalRoutes } from './modules/portal/routes';
 import { lessonsRoutes, seriesRoutes } from './modules/schedule/routes';
 import { generateAll } from './modules/schedule/service';
+import { settingsRoutes } from './modules/settings/routes';
 import { studentsRoutes } from './modules/students/routes';
 
 const HTTP_CODES: Partial<Record<number, string>> = { 400: 'bad_request', 401: 'unauthorized', 403: 'forbidden' };
@@ -35,6 +36,7 @@ app.route('/admin/students', studentsRoutes);
 app.route('/admin/series', seriesRoutes);
 app.route('/admin/lessons', lessonsRoutes);
 app.route('/admin/assignments', assignmentsRoutes);
+app.route('/admin/settings', settingsRoutes);
 // Максимальные баллы по номерам заданий — для формы оценки пробника.
 app.get('/admin/exams', c => c.json(EXAM_MAX_SCORES));
 // Публичный контур ученика: вне /admin, поэтому auth и csrf на него не действуют.

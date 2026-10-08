@@ -8,6 +8,7 @@ import { notFound } from '../../lib/errors';
 import { onInvalid, rangeQuery } from '../../lib/validation';
 import { listMocks } from '../assignments/service';
 import { deleteStudent, listActiveSeries, listLessons } from '../schedule/service';
+import { themeField } from '../settings/routes';
 import { EXAMS, students } from './schema';
 import { createStudent, updateStudent } from './service';
 import { newAccessToken } from './token';
@@ -43,6 +44,9 @@ export const studentFields = {
   notes: optionalText(5000),
 };
 
+// Тема — только из кабинета, в MCP-инструменты studentFields она не попадает.
+const adminStudentFields = { ...studentFields, theme: v.optional(themeField) };
+
 const getStudent = async (db: Db, id: string) => {
   const student = await db.select().from(students).where(eq(students.id, id)).get();
   if (!student) throw notFound('Ученик не найден');
@@ -51,11 +55,11 @@ const getStudent = async (db: Db, id: string) => {
 
 export const studentsRoutes = new Hono<{ Bindings: Env }>()
   .get('/', async c => c.json(await getDb(c.env).select().from(students).orderBy(desc(students.createdAt))))
-  .post('/', sValidator('json', v.object(studentFields), onInvalid), async c =>
+  .post('/', sValidator('json', v.object(adminStudentFields), onInvalid), async c =>
     c.json(await createStudent(getDb(c.env), c.req.valid('json')), 201),
   )
   .get('/:id', async c => c.json(await getStudent(getDb(c.env), c.req.param('id'))))
-  .patch('/:id', sValidator('json', v.partial(v.object(studentFields)), onInvalid), async c =>
+  .patch('/:id', sValidator('json', v.partial(v.object(adminStudentFields)), onInvalid), async c =>
     c.json(await updateStudent(getDb(c.env), c.req.param('id'), c.req.valid('json'))),
   )
   .delete('/:id', async c => {

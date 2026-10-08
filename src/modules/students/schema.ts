@@ -1,6 +1,7 @@
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 import { id, timestamps } from '../../db/columns';
+import { DEFAULT_THEME } from '../settings/schema';
 import { newAccessToken } from './token';
 
 // null — ученик без экзамена: пробники и аналитика ему не нужны.
@@ -14,6 +15,8 @@ export const students = sqliteTable('students', {
   exam: text('exam', { enum: EXAMS }),
   contact: text('contact'),
   notes: text('notes'),
+  // Тема портала ученика, задаёт репетитор.
+  theme: text('theme').notNull().default(DEFAULT_THEME),
   // Личная ссылка ученика: /api/s/:token. Роуты задают её из имени; default — для вставок в обход API.
   accessToken: text('access_token')
     .notNull()

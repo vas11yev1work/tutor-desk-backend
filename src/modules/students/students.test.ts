@@ -30,6 +30,8 @@ describe('админские эндпоинты без cookie → 401', () => {
     ['DELETE', '/admin/assignments/x'],
     ['PUT', '/admin/assignments/x/score'],
     ['GET', '/admin/exams'],
+    ['GET', '/admin/settings'],
+    ['PATCH', '/admin/settings'],
     ['GET', '/admin/students/x/series'],
     ['POST', '/admin/series'],
     ['POST', '/admin/series/x/change'],
@@ -63,6 +65,18 @@ describe('ученики', () => {
     });
     expect(patched.status).toBe(200);
     expect(await patched.json()).toMatchObject({ grade: 11, exam: 'ege_profile', notes: null, name: 'Маша' });
+  });
+
+  it('тема: по умолчанию lime, меняется через PATCH', async () => {
+    const created = await createStudent();
+    expect(created.theme).toBe('lime');
+    const patched = await adminApi(auth, `/admin/students/${created.id}`, {
+      method: 'PATCH',
+      body: { theme: 'ocean' },
+    });
+    expect(await patched.json()).toMatchObject({ theme: 'ocean' });
+    const empty = await adminApi(auth, `/admin/students/${created.id}`, { method: 'PATCH', body: { theme: ' ' } });
+    expect(empty.status).toBe(400);
   });
 
   it('валидация: класс вне 1–11 и неизвестный экзамен → 400', async () => {
@@ -126,5 +140,15 @@ describe('telegramUsername', () => {
       expect(telegramUsername(input), input).toBe('vera_tg');
     }
     expect(telegramUsername('  @ ')).toBeNull();
+  });
+});
+
+describe('настройки кабинета', () => {
+  it('тема: lime по умолчанию, PATCH сохраняет', async () => {
+    expect(await (await adminApi(auth, '/admin/settings')).json()).toEqual({ theme: 'lime' });
+    const patched = await adminApi(auth, '/admin/settings', { method: 'PATCH', body: { theme: 'grape' } });
+    expect(await patched.json()).toEqual({ theme: 'grape' });
+    expect(await (await adminApi(auth, '/admin/settings')).json()).toEqual({ theme: 'grape' });
+    expect((await adminApi(auth, '/admin/settings', { method: 'PATCH', body: {} })).status).toBe(400);
   });
 });

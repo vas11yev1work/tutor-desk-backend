@@ -43,6 +43,13 @@
       "when": 1791412886064,
       "tag": "0005_wet_lifeguard",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1791492184558,
+      "tag": "0006_white_luminals",
+      "breakpoints": true
     }
   ]
 }

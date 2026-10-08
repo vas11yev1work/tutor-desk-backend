@@ -13,7 +13,7 @@ import { students } from '../students/schema';
 /** Ученик по личному токену; неверный токен или удалённый ученик → 404. */
 const findStudent = async (db: Db, token: string) => {
   const student = await db
-    .select({ id: students.id, name: students.name, grade: students.grade, exam: students.exam })
+    .select({ id: students.id, name: students.name, grade: students.grade, exam: students.exam, theme: students.theme })
     .from(students)
     .where(eq(students.accessToken, token))
     .get();

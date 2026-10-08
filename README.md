@@ -122,6 +122,8 @@ bunx wrangler secret put JWT_SECRET   # значение: openssl rand -base64 4
 ### Админка (`/api/admin`, cookie сессии)
 
 - `GET /students` (без архивных; `?archived=true` — все), `POST /students`, `GET|PATCH /students/:id`
+- Тема ученика — поле `theme` (строка, по умолчанию `lime`) в `POST /students` и `PATCH /students/:id`
+- `GET /settings` → `{ theme }`, `PATCH /settings` `{ theme }` — общая тема кабинета репетитора
 - `POST /students/:id/archive` — завершает правила, удаляет будущие немодифицированные занятия
 - `POST /students/:id/regenerate-token` — старая ссылка ученика перестаёт работать
 - `POST /series` `{ studentId, weekday, startTime, durationMin, timezone, startsOn }`
@@ -131,7 +133,7 @@ bunx wrangler secret put JWT_SECRET   # значение: openssl rand -base64 4
 
 ### Ученик (`/api/s/:token`, без авторизации, только GET)
 
-- `GET /api/s/:token` → `{ name, grade, exam }`
+- `GET /api/s/:token` → `{ name, grade, exam, theme, examMax }`
 - `GET /api/s/:token/lessons?from=&to=` → `[{ id, startsAt, durationMin, status }]`
 
 ### Как работает расписание

@@ -5,7 +5,7 @@ import { notFound } from '../../lib/errors';
 import { type Student, students } from './schema';
 import { newAccessToken } from './token';
 
-type StudentInput = Pick<Student, 'name'> & Partial<Pick<Student, 'grade' | 'exam' | 'contact' | 'notes'>>;
+type StudentInput = Pick<Student, 'name'> & Partial<Pick<Student, 'grade' | 'exam' | 'contact' | 'notes' | 'theme'>>;
 
 export const createStudent = (db: Db, input: StudentInput) =>
   db
