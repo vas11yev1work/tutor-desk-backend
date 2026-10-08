@@ -7,7 +7,7 @@ API кабинета репетитора: Hono на Cloudflare Workers, фай�
 ## Команды
 
 - `bun install` — поставить зависимости
-- `bun dev` — локальный сервер `wrangler dev` на http://localhost:8787 (R2 эмулируется локально)
+- `bun dev` — локальный сервер `wrangler dev` на http://localhost:8787 (R2 эмулируется локально). `--local-upstream` — чтобы воркер видел `localhost:8787`, а не хост из `routes` (иначе OAuth-метаданные MCP указывают на прод)
 - `bun run deploy` — задеплоить воркер
 - `bun cf-typegen` — перегенерировать `worker-configuration.d.ts` после изменений в `wrangler.jsonc`
 - `bun lint` / `bun lint:fix` — ESLint
@@ -89,6 +89,22 @@ bunx wrangler secret put JWT_SECRET   # значение: openssl rand -base64 4
 ```
 
 Смена `JWT_SECRET` разлогинивает все сессии.
+
+## MCP-коннектор для Claude
+
+Аналитика пробников из Claude (claude.ai, приложения, Claude Code). Только чтение. Код — `src/modules/mcp`.
+
+- `POST /api/mcp`: MCP по Streamable HTTP, JSON-RPC, без сессий и SSE. Инструменты:
+  - `list_students` — ученики и счётчики пробников;
+  - `get_mocks(studentId?)` — баллы по номерам вместе с максимумами и темами из `topics.ts`.
+- OAuth 2.1, public client + PKCE, без хранилища, всё на JWT. Токены подписаны ключом `JWT_SECRET + ':oauth'`, поэтому cookie-сессия не годится как Bearer, и наоборот.
+  - `/api/oauth/register` (DCR): разрешены колбэки claude.ai/claude.com и loopback.
+  - `/api/oauth/authorize`: форма логина и пароля с той же защитой от перебора.
+  - `/api/oauth/token`: access-токен на 1 час, refresh — на 30 дней.
+- `/.well-known/oauth-*` живут в корне домена, отдельный route в `wrangler.jsonc`.
+- Отозвать доступ можно только у всех сразу: сменить `JWT_SECRET`. Разлогинит и сессии в кабинете.
+
+Подключение: claude.ai → Settings → Connectors → Add custom connector → `https://desk.vslvv.com/api/mcp` → войти логином и паролем кабинета. В мобильном приложении коннектор появится сам.
 
 ## Ученики и расписание
 

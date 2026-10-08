@@ -11,7 +11,11 @@
   "triggers": {
     "crons": ["0 3 * * *"],
   },
-  "routes": [{ "pattern": "desk.vslvv.com/api/*", "zone_name": "vslvv.com" }],
+  "routes": [
+    { "pattern": "desk.vslvv.com/api/*", "zone_name": "vslvv.com" },
+    // OAuth-метаданные для MCP-коннектора Claude ищутся от корня домена.
+    { "pattern": "desk.vslvv.com/.well-known/oauth-*", "zone_name": "vslvv.com" },
+  ],
   "workers_dev": false, // API доступен только через домен
   "vars": {
     // Origin'ы фронта для CSRF-проверки (hono/csrf), через запятую.
