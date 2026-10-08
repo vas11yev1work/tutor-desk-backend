@@ -1,3 +1,4 @@
+import { env } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { adminApi, type AdminAuth, api, loginAsAdmin, ORIGIN } from '../../test/helpers';
@@ -31,6 +32,9 @@ describe('админские эндпоинты без cookie → 401', () => {
     ['PUT', '/admin/assignments/x/score'],
     ['GET', '/admin/exams'],
     ['GET', '/admin/settings'],
+    ['GET', '/admin/students/x/cover'],
+    ['PUT', '/admin/students/x/cover'],
+    ['DELETE', '/admin/students/x/cover'],
     ['PATCH', '/admin/settings'],
     ['GET', '/admin/students/x/series'],
     ['POST', '/admin/series'],
@@ -150,5 +154,52 @@ describe('настройки кабинета', () => {
     expect(await patched.json()).toEqual({ theme: 'grape' });
     expect(await (await adminApi(auth, '/admin/settings')).json()).toEqual({ theme: 'grape' });
     expect((await adminApi(auth, '/admin/settings', { method: 'PATCH', body: {} })).status).toBe(400);
+  });
+});
+
+describe('обложка ученика', () => {
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+  const putCover = (id: string, file: File) => {
+    const body = new FormData();
+    body.append('file', file);
+    return api(`/admin/students/${id}/cover`, { method: 'PUT', headers: auth, body });
+  };
+  const coverKeys = async (id: string) => (await env.FILES.list({ prefix: `covers/${id}/` })).objects.map(o => o.key);
+
+  it('загрузка, замена, отдача админу и ученику, удаление', async () => {
+    const student = await createStudent();
+    expect(student.coverId).toBeNull();
+
+    const first = await (await putCover(student.id, new File([png], 'a.png'))).json<Student>();
+    expect(first.coverId).toBeTruthy();
+    const second = await (await putCover(student.id, new File([png], 'b.png'))).json<Student>();
+    expect(second.coverId).not.toBe(first.coverId);
+    // Старая обложка удалена из R2.
+    expect(await coverKeys(student.id)).toEqual([`covers/${student.id}/${second.coverId}`]);
+
+    for (const res of [
+      await adminApi(auth, `/admin/students/${student.id}/cover`),
+      await api(`/s/${student.accessToken}/cover`),
+    ]) {
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toBe('image/png');
+      expect(new Uint8Array(await res.arrayBuffer())).toEqual(png);
+    }
+
+    const removed = await adminApi(auth, `/admin/students/${student.id}/cover`, { method: 'DELETE' });
+    expect((await removed.json<Student>()).coverId).toBeNull();
+    expect(await coverKeys(student.id)).toEqual([]);
+    expect((await api(`/s/${student.accessToken}/cover`)).status).toBe(404);
+  });
+
+  it('не картинка → 400, удаление ученика чистит обложку', async () => {
+    const student = await createStudent();
+    const bad = await putCover(student.id, new File(['%PDF-1.7'], 'x.png'));
+    expect(bad.status).toBe(400);
+    expect(await bad.json()).toMatchObject({ error: { code: 'not_image' } });
+
+    await putCover(student.id, new File([png], 'a.png'));
+    await adminApi(auth, `/admin/students/${student.id}`, { method: 'DELETE' });
+    expect(await coverKeys(student.id)).toEqual([]);
   });
 });

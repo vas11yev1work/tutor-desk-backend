@@ -8,12 +8,20 @@ import { onInvalid, rangeQuery } from '../../lib/validation';
 import { EXAM_MAX_SCORES, sum } from '../assignments/scores';
 import { fileResponse, listMocks } from '../assignments/service';
 import { listLessons } from '../schedule/service';
+import { coverResponse } from '../students/cover';
 import { students } from '../students/schema';
 
 /** Ученик по личному токену; неверный токен или удалённый ученик → 404. */
 const findStudent = async (db: Db, token: string) => {
   const student = await db
-    .select({ id: students.id, name: students.name, grade: students.grade, exam: students.exam, theme: students.theme })
+    .select({
+      id: students.id,
+      name: students.name,
+      grade: students.grade,
+      exam: students.exam,
+      theme: students.theme,
+      coverId: students.coverId,
+    })
     .from(students)
     .where(eq(students.accessToken, token))
     .get();
@@ -28,6 +36,7 @@ export const portalRoutes = new Hono<{ Bindings: Env }>()
     // Максимальный первичный балл — для «16 / 32» у пробников.
     return c.json({ ...profile, examMax: profile.exam ? sum(EXAM_MAX_SCORES[profile.exam]) : null });
   })
+  .get('/:token/cover', async c => coverResponse(c.env.FILES, await findStudent(getDb(c.env), c.req.param('token'))))
   .get('/:token/lessons', sValidator('query', rangeQuery, onInvalid), async c => {
     const db = getDb(c.env);
     const { id } = await findStudent(db, c.req.param('token'));

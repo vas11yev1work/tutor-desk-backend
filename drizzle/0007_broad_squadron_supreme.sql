@@ -1,0 +1,1 @@
+ALTER TABLE `students` ADD `cover_id` text;

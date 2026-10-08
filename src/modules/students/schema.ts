@@ -16,6 +16,8 @@ export const students = sqliteTable('students', {
   contact: text('contact'),
   notes: text('notes'),
   // Тема портала ученика, задаёт репетитор.
+  // Обложка в R2 (covers/:studentId/:coverId); null — нет обложки.
+  coverId: text('cover_id'),
   theme: text('theme').notNull().default(DEFAULT_THEME),
   // Личная ссылка ученика: /api/s/:token. Роуты задают её из имени; default — для вставок в обход API.
   accessToken: text('access_token')

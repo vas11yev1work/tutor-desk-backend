@@ -36,7 +36,14 @@ describe('/api/s/:token', () => {
 
     const profile = await api(`/s/${student.accessToken}`);
     expect(profile.status).toBe(200);
-    expect(await profile.json()).toEqual({ name: 'Катя', grade: 9, exam: 'oge', theme: 'lime', examMax: 31 });
+    expect(await profile.json()).toEqual({
+      name: 'Катя',
+      grade: 9,
+      exam: 'oge',
+      theme: 'lime',
+      coverId: null,
+      examMax: 31,
+    });
 
     const res = await api(`/s/${student.accessToken}/lessons?${range}`);
     expect(res.status).toBe(200);

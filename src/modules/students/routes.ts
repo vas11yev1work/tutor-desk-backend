@@ -4,11 +4,12 @@ import { Hono } from 'hono';
 import * as v from 'valibot';
 
 import { type Db, getDb } from '../../db';
-import { notFound } from '../../lib/errors';
+import { ApiError, notFound } from '../../lib/errors';
 import { onInvalid, rangeQuery } from '../../lib/validation';
 import { listMocks } from '../assignments/service';
 import { deleteStudent, listActiveSeries, listLessons } from '../schedule/service';
 import { themeField } from '../settings/routes';
+import { coverResponse, deleteCoverFile, setCover } from './cover';
 import { EXAMS, students } from './schema';
 import { createStudent, updateStudent } from './service';
 import { newAccessToken } from './token';
@@ -63,9 +64,20 @@ export const studentsRoutes = new Hono<{ Bindings: Env }>()
     c.json(await updateStudent(getDb(c.env), c.req.param('id'), c.req.valid('json'))),
   )
   .delete('/:id', async c => {
-    await deleteStudent(getDb(c.env), c.req.param('id'));
+    const db = getDb(c.env);
+    const student = await getStudent(db, c.req.param('id'));
+    await deleteStudent(db, student.id);
+    await deleteCoverFile(c.env.FILES, student);
     return c.body(null, 204);
   })
+  .get('/:id/cover', async c => coverResponse(c.env.FILES, await getStudent(getDb(c.env), c.req.param('id'))))
+  // multipart/form-data, поле `file`: JPEG, PNG или WebP; старая обложка удаляется.
+  .put('/:id/cover', async c => {
+    const { file } = await c.req.parseBody();
+    if (!(file instanceof File)) throw new ApiError(400, 'validation_error', 'file: нужен файл');
+    return c.json(await setCover(getDb(c.env), c.env.FILES, c.req.param('id'), file));
+  })
+  .delete('/:id/cover', async c => c.json(await setCover(getDb(c.env), c.env.FILES, c.req.param('id'), null)))
   // Имя в ссылке — текущее: после переименования новая ссылка будет уже с новым именем.
   .post('/:id/regenerate-token', async c => {
     const db = getDb(c.env);
