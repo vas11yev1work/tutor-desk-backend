@@ -8,7 +8,7 @@ ADMIN_PASSWORD=
 JWT_SECRET=
 
 # CSRF: origin локального фронта (в проде — vars в wrangler.jsonc)
-ALLOWED_ORIGINS=http://localhost:5173
+ALLOWED_ORIGINS=http://localhost:5173,http://localhost:8787
 
 # Drizzle Kit (driver d1-http) — нужны только для `bun db:studio` против удалённой D1.
 CLOUDFLARE_ACCOUNT_ID=

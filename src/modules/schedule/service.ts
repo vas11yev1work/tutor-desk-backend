@@ -169,12 +169,12 @@ export const deleteStudent = async (db: Db, studentId: string) => {
   ]);
 };
 
-/** Правила ученика, которые ещё действуют (ends_on не раньше сегодня), включая начинающиеся в будущем. */
-export const listActiveSeries = async (db: Db, studentId: string, now: number) => {
+/** Правила ученика (без studentId — всех), которые ещё действуют (ends_on не раньше сегодня), включая будущие. */
+export const listActiveSeries = async (db: Db, studentId: string | undefined, now: number) => {
   const rows = await db
     .select()
     .from(lessonSeries)
-    .where(eq(lessonSeries.studentId, studentId))
+    .where(studentId ? eq(lessonSeries.studentId, studentId) : undefined)
     .orderBy(asc(lessonSeries.weekday), asc(lessonSeries.startTime), asc(lessonSeries.startsOn));
   return rows.filter(s => !s.endsOn || s.endsOn >= localDate(now, s.timezone));
 };

@@ -9,6 +9,8 @@ import { EXAM_MAX_SCORES } from './modules/assignments/scores';
 import { sweepOrphanFiles } from './modules/assignments/service';
 import { csrfProtection, requireAuth } from './modules/auth/middleware';
 import { authRoutes } from './modules/auth/routes';
+import { oauthRoutes, wellKnownRoutes } from './modules/mcp/oauth';
+import { mcpRoutes } from './modules/mcp/routes';
 import { portalRoutes } from './modules/portal/routes';
 import { lessonsRoutes, seriesRoutes } from './modules/schedule/routes';
 import { generateAll } from './modules/schedule/service';
@@ -37,6 +39,9 @@ app.route('/admin/assignments', assignmentsRoutes);
 app.get('/admin/exams', c => c.json(EXAM_MAX_SCORES));
 // Публичный контур ученика: вне /admin, поэтому auth и csrf на него не действуют.
 app.route('/s', portalRoutes);
+// MCP-коннектор для Claude: OAuth-вход и read-only инструменты (src/modules/mcp).
+app.route('/oauth', oauthRoutes);
+app.route('/mcp', mcpRoutes);
 
 app.notFound(c => c.json({ error: { code: 'not_found', message: 'Не найдено' } }, 404));
 
@@ -51,7 +56,9 @@ app.onError((err, c) => {
 });
 
 export default {
-  fetch: app.fetch,
+  // /.well-known/oauth-* живут вне basePath /api (отдельный route в wrangler.jsonc).
+  fetch: (req, env, ctx) =>
+    (new URL(req.url).pathname.startsWith('/.well-known/') ? wellKnownRoutes : app).fetch(req, env, ctx),
   // Cron Trigger (раз в сутки): догенерировать занятия до горизонта 8 недель и подчистить файлы без заданий.
   scheduled: (_controller, env, ctx) => {
     const db = getDb(env);

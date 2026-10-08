@@ -39,3 +39,28 @@ export const registerAttempt = async (db: Db, ip: string, now: number) => {
 };
 
 export const resetAttempts = (db: Db, ip: string) => db.delete(t).where(eq(t.ip, ip));
+
+const sha256 = (s: string) => crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+
+// Хеши одинаковой длины → timingSafeEqual не выдаёт длину секрета.
+const safeEqual = async (a: string, b: string) => crypto.subtle.timingSafeEqual(await sha256(a), await sha256(b));
+
+/** Логин и пароль админа с защитой от перебора: 'ok', 'invalid' или конец блокировки (ms). */
+export const checkCredentials = async (
+  db: Db,
+  env: Env,
+  ip: string,
+  input: { login: string; password: string },
+  now: number,
+) => {
+  const blockedUntil = await registerAttempt(db, ip, now);
+  if (blockedUntil) return blockedUntil;
+  // Обе проверки всегда, без раннего выхода.
+  const [loginOk, passwordOk] = await Promise.all([
+    safeEqual(input.login, env.ADMIN_LOGIN),
+    safeEqual(input.password, env.ADMIN_PASSWORD),
+  ]);
+  if (!loginOk || !passwordOk) return 'invalid';
+  await resetAttempts(db, ip);
+  return 'ok';
+};
