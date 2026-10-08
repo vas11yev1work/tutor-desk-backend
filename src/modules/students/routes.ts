@@ -14,11 +14,32 @@ import { newAccessToken } from './token';
 
 const optionalText = (max: number) => v.optional(v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(max))));
 
+/**
+ * Контакт — Telegram-юзернейм без @: фронт и виджеты сами строят из него @label и ссылку t.me.
+ * Чистим то, что пишут люди и Claude: «Telegram: @vera_tg», «tg vera_tg», «https://t.me/vera_tg» → «vera_tg».
+ */
+export const telegramUsername = (contact: string) =>
+  contact
+    .trim()
+    .replace(/^(telegram|телеграм|tg|тг)\s*:?\s*/i, '')
+    .replace(/^(https?:\/\/)?(t\.me|telegram\.me)\//i, '')
+    .replace(/^@/, '')
+    .trim() || null;
+
 export const studentFields = {
   name: v.pipe(v.string(), v.trim(), v.nonEmpty('Имя обязательно'), v.maxLength(200)),
   grade: v.optional(v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(11)))),
   exam: v.optional(v.nullable(v.picklist(EXAMS))),
-  contact: optionalText(500),
+  contact: v.optional(
+    v.nullable(
+      v.pipe(
+        v.string(),
+        v.maxLength(500),
+        v.transform(telegramUsername),
+        v.description('Telegram-юзернейм без @ и без «Telegram:», например vera_tg'),
+      ),
+    ),
+  ),
   notes: optionalText(5000),
 };
 

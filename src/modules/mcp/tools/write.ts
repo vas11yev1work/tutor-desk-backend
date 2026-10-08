@@ -19,6 +19,8 @@ import {
 import { addDays, toUtc } from '../../schedule/time';
 import { studentFields } from '../../students/routes';
 import { createStudent, updateStudent } from '../../students/service';
+import { VIEWS } from '../views';
+import { getStudent } from './read';
 import { defineTool, lessonView, local, seriesView, tutorTimezone } from './shared';
 
 /**
@@ -62,18 +64,27 @@ export const writeTools = [
   defineTool({
     name: 'create_student',
     title: 'Новый ученик',
-    description: 'Создать ученика. exam: oge | ege_base | ege_profile; grade 1–11; null — не указано.',
+    description:
+      'Создать ученика; в ответе — его карточка. exam: oge | ege_base | ege_profile; grade 1–11; null — не указано. ' +
+      'Несколько учеников — по вызову на каждого.',
     input: v.object(studentFields),
     annotations: WRITE,
-    run: (db, input) => createStudent(db, input),
+    view: VIEWS.student.uri,
+    run: async (db, input) => getStudent(db, (await createStudent(db, input)).id),
   }),
   defineTool({
     name: 'update_student',
     title: 'Изменить ученика',
-    description: 'Изменить имя, класс, экзамен, контакт или заметки ученика. Передавай только меняющиеся поля.',
+    description:
+      'Изменить имя, класс, экзамен, контакт или заметки ученика; в ответе — обновлённая карточка. ' +
+      'Передавай только меняющиеся поля.',
     input: v.object({ studentId, ...v.partial(v.object(studentFields)).entries }),
     annotations: { ...WRITE, idempotentHint: true },
-    run: (db, { studentId: id, ...patch }) => updateStudent(db, id, patch),
+    view: VIEWS.student.uri,
+    run: async (db, { studentId: id, ...patch }) => {
+      await updateStudent(db, id, patch);
+      return getStudent(db, id);
+    },
   }),
   defineTool({
     name: 'create_lesson',

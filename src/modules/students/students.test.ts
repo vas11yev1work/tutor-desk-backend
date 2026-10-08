@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { adminApi, type AdminAuth, api, loginAsAdmin, ORIGIN } from '../../test/helpers';
+import { telegramUsername } from './routes';
 import type { Student } from './schema';
 import { nameSlug, newAccessToken } from './token';
 
@@ -49,7 +50,8 @@ describe('админские эндпоинты без cookie → 401', () => {
 describe('ученики', () => {
   it('создание, чтение, изменение', async () => {
     const created = await createStudent({ grade: 9, exam: 'oge', contact: '@masha', notes: 'любит геометрию' });
-    expect(created).toMatchObject({ name: 'Маша', grade: 9, exam: 'oge' });
+    // Контакт хранится юзернеймом без @.
+    expect(created).toMatchObject({ name: 'Маша', grade: 9, exam: 'oge', contact: 'masha' });
     expect(created.accessToken).toMatch(/^masha-[0-9A-Za-z]{8}$/);
 
     const got = await adminApi(auth, `/admin/students/${created.id}`);
@@ -107,5 +109,22 @@ describe('личная ссылка', () => {
     expect(nameSlug('🙂')).toBe('');
     expect(newAccessToken('🙂')).toMatch(/^[0-9A-Za-z]{8}$/);
     expect(newAccessToken('Аня')).toMatch(/^anya-[0-9A-Za-z]{8}$/);
+  });
+});
+
+describe('telegramUsername', () => {
+  it('оставляет только юзернейм', () => {
+    for (const input of [
+      'vera_tg',
+      '@vera_tg',
+      ' Telegram: @vera_tg ',
+      'tg vera_tg',
+      'ТГ: @vera_tg',
+      'https://t.me/vera_tg',
+      't.me/vera_tg',
+    ]) {
+      expect(telegramUsername(input), input).toBe('vera_tg');
+    }
+    expect(telegramUsername('  @ ')).toBeNull();
   });
 });

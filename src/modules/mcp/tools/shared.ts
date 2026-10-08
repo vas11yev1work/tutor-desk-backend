@@ -15,6 +15,8 @@ export type Tool<S extends v.GenericSchema = v.GenericSchema> = {
   /** Схема аргументов: валидирует вызов и превращается в inputSchema для tools/list. */
   input: S;
   annotations: Annotations;
+  /** ui://-ресурс MCP Apps (views/), которым клиент рисует результат. */
+  view?: string;
   /** Ошибки бросает ApiError — клиенту уходят как isError с текстом. */
   run: (db: Db, input: v.InferOutput<S>) => Promise<unknown>;
 };

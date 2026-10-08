@@ -8,6 +8,7 @@ import { ApiError } from '../../lib/errors';
 import { readToken, resourceMetadataUrl } from './oauth';
 import { readTools } from './tools/read';
 import { writeTools } from './tools/write';
+import { VIEW_MIME, VIEWS } from './views';
 
 /**
  * MCP-сервер (Streamable HTTP, без сессий и SSE): JSON-RPC в POST /api/mcp, ответ — обычный JSON.
@@ -28,10 +29,19 @@ const INSTRUCTIONS = `Кабинет репетитора по математи�
 const TOOLS = [...readTools, ...writeTools];
 
 // inputSchema считается один раз; проверки без аналога в JSON Schema (v.check, trim) просто не попадают в схему.
-const TOOL_LIST = TOOLS.map(({ name, title, description, input, annotations }) => {
+const TOOL_LIST = TOOLS.map(({ name, title, description, input, annotations, view }) => {
   const { $schema: _, ...inputSchema } = toJsonSchema(input, { errorMode: 'ignore' });
-  return { name, title, description, inputSchema, annotations };
+  return {
+    name,
+    title,
+    description,
+    inputSchema,
+    annotations,
+    ...(view ? { _meta: { ui: { resourceUri: view } } } : {}),
+  };
 });
+
+const RESOURCES = Object.values(VIEWS);
 
 class RpcError extends Error {
   constructor(
@@ -44,6 +54,8 @@ class RpcError extends Error {
 
 const text = (data: unknown, isError = false) => ({
   content: [{ type: 'text', text: typeof data === 'string' ? data : JSON.stringify(data) }],
+  // Виджеты MCP Apps читают structuredContent; он обязан быть объектом, массивы виджет берёт из text.
+  ...(data && typeof data === 'object' && !Array.isArray(data) ? { structuredContent: data } : {}),
   ...(isError ? { isError } : {}),
 });
 
@@ -80,7 +92,7 @@ const handle = async (db: Db, origin: string, method: string, params: Record<str
       return {
         protocolVersion:
           typeof requested === 'string' && PROTOCOL_VERSIONS.includes(requested) ? requested : PROTOCOL_VERSIONS[0],
-        capabilities: { tools: {} },
+        capabilities: { tools: {}, resources: {}, extensions: { 'io.modelcontextprotocol/ui': {} } },
         serverInfo: serverInfo(origin),
         instructions: INSTRUCTIONS,
       };
@@ -91,6 +103,15 @@ const handle = async (db: Db, origin: string, method: string, params: Record<str
       return { tools: TOOL_LIST };
     case 'tools/call':
       return callTool(db, params.name, params.arguments);
+    case 'resources/list':
+      return {
+        resources: RESOURCES.map(({ uri, name, description }) => ({ uri, name, description, mimeType: VIEW_MIME })),
+      };
+    case 'resources/read': {
+      const view = RESOURCES.find(r => r.uri === params.uri);
+      if (!view) throw new RpcError(-32002, `Resource not found: ${String(params.uri)}`);
+      return { contents: [{ uri: view.uri, mimeType: VIEW_MIME, text: view.html }] };
+    }
     default:
       throw new RpcError(-32601, `Method not found: ${method}`);
   }

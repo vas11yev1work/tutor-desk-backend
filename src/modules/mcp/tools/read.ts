@@ -5,17 +5,61 @@ import type { Db } from '../../../db';
 import { ApiError, notFound } from '../../../lib/errors';
 import { isoDate } from '../../../lib/validation';
 import { assignments } from '../../assignments/schema';
-import { EXAM_MAX_SCORES } from '../../assignments/scores';
+import { EXAM_MAX_SCORES, sum } from '../../assignments/scores';
 import { listMocks } from '../../assignments/service';
 import { listActiveSeries, listLessons } from '../../schedule/service';
 import { addDays, localDate, toUtc } from '../../schedule/time';
 import { students } from '../../students/schema';
 import { EXAM_TOPICS } from '../topics';
+import { VIEWS } from '../views';
 import { defineTool, lessonView, local, READ_ONLY, seriesView, tutorTimezone } from './shared';
 
 const MAX_RANGE_DAYS = 93;
 
 const byStudent = v.object({ studentId: v.optional(v.pipe(v.string(), v.description('id ученика из list_students'))) });
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Занятия в [from, to) в поясе репетитора. */
+const lessonsBetween = async (db: Db, tz: string, from: number, to: number, studentId?: string) =>
+  (await listLessons(db, { from: new Date(from), to: new Date(to), studentId })).map(l => lessonView(l, tz));
+
+/** Карточка ученика: её же возвращают create_student и update_student. */
+export const getStudent = async (db: Db, id: string) => {
+  const student = await db
+    .select({
+      id: students.id,
+      name: students.name,
+      grade: students.grade,
+      exam: students.exam,
+      contact: students.contact,
+      notes: students.notes,
+    })
+    .from(students)
+    .where(eq(students.id, id))
+    .get();
+  if (!student) throw notFound('Ученик не найден');
+  const tz = await tutorTimezone(db);
+  const now = Date.now();
+  const [upcoming, series, mocks] = await Promise.all([
+    lessonsBetween(db, tz, now, now + 14 * DAY_MS, id),
+    listActiveSeries(db, id, now),
+    listMocks(db, id),
+  ]);
+  return {
+    now: local(now, tz),
+    student,
+    upcoming: upcoming.filter(l => l.status !== 'cancelled').slice(0, 5),
+    series: series.map(s => {
+      const { studentId: _, ...rest } = seriesView(s);
+      return rest;
+    }),
+    mocks: {
+      max: student.exam ? sum(EXAM_MAX_SCORES[student.exam]) : null,
+      items: mocks.map(m => ({ number: m.number, lessonDate: local(m.lessonStartsAt, tz), total: m.total })),
+    },
+  };
+};
 
 const getMocks = async (db: Db, studentId?: string) => {
   const rows = await db
@@ -54,6 +98,7 @@ export const readTools = [
       'Все ученики: id, имя, класс, экзамен, контакт, заметки репетитора, сколько пробников выдано и проверено.',
     input: v.object({}),
     annotations: READ_ONLY,
+    view: VIEWS.students.uri,
     run: db =>
       db
         .select({
@@ -70,6 +115,17 @@ export const readTools = [
         .leftJoin(assignments, and(eq(assignments.studentId, students.id), eq(assignments.kind, 'mock')))
         .groupBy(students.id)
         .orderBy(asc(students.name)),
+  }),
+  defineTool({
+    name: 'get_student',
+    title: 'Карточка ученика',
+    description:
+      'Всё про одного ученика: профиль, ближайшие занятия (до 5 за 2 недели), регулярное расписание, итоги пробников. ' +
+      'Для «покажи ученика X». Баллы по номерам заданий — в get_mocks.',
+    input: v.object({ studentId: v.pipe(v.string(), v.description('id ученика из list_students')) }),
+    annotations: READ_ONLY,
+    view: VIEWS.student.uri,
+    run: (db, { studentId }) => getStudent(db, studentId),
   }),
   defineTool({
     name: 'get_mocks',
@@ -95,6 +151,7 @@ export const readTools = [
       to: v.optional(v.pipe(isoDate, v.description('YYYY-MM-DD включительно; по умолчанию — через 7 дней'))),
     }),
     annotations: READ_ONLY,
+    view: VIEWS.week.uri,
     run: async (db, input) => {
       const tz = await tutorTimezone(db);
       const now = Date.now();
@@ -104,8 +161,23 @@ export const readTools = [
       if (to - from > MAX_RANGE_DAYS * 24 * 60 * 60 * 1000) {
         throw new ApiError(400, 'validation_error', `Период не больше ${MAX_RANGE_DAYS} дней`);
       }
-      const rows = await listLessons(db, { from: new Date(from), to: new Date(to), studentId: input.studentId });
-      return { now: local(now, tz), timezone: tz, lessons: rows.map(l => lessonView(l, tz)) };
+      return { now: local(now, tz), timezone: tz, lessons: await lessonsBetween(db, tz, from, to, input.studentId) };
+    },
+  }),
+  defineTool({
+    name: 'get_today',
+    title: 'Сегодня',
+    description:
+      'Все занятия на сегодня (в поясе репетитора), включая прошедшие и отменённые. Для «что у меня сегодня».',
+    input: v.object({}),
+    annotations: READ_ONLY,
+    view: VIEWS.today.uri,
+    run: async db => {
+      const tz = await tutorTimezone(db);
+      const now = Date.now();
+      const today = localDate(now, tz);
+      const lessons = await lessonsBetween(db, tz, toUtc(today, '00:00', tz), toUtc(addDays(today, 1), '00:00', tz));
+      return { now: local(now, tz), timezone: tz, lessons };
     },
   }),
   defineTool({

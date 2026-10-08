@@ -210,7 +210,7 @@ describe('/api/mcp', () => {
       id: 1,
       result: {
         protocolVersion: '2025-06-18',
-        capabilities: { tools: {} },
+        capabilities: { tools: {}, resources: {}, extensions: { 'io.modelcontextprotocol/ui': {} } },
         serverInfo: {
           name: 'tutor-desk',
           websiteUrl: 'http://localhost',
@@ -226,13 +226,20 @@ describe('/api/mcp', () => {
 
     expect((await post(token, { jsonrpc: '2.0', method: 'notifications/initialized' })).status).toBe(202);
 
-    type Listed = { name: string; inputSchema: Record<string, unknown>; annotations: Record<string, unknown> };
+    type Listed = {
+      name: string;
+      inputSchema: Record<string, unknown>;
+      annotations: Record<string, unknown>;
+      _meta?: { ui: { resourceUri: string } };
+    };
     const list = await (await rpc(token, 'tools/list')).json<{ result: { tools: Listed[] } }>();
     const tools = list.result.tools;
     expect(tools.map(t => t.name)).toEqual([
       'list_students',
+      'get_student',
       'get_mocks',
       'get_lessons',
+      'get_today',
       'get_series',
       'create_student',
       'update_student',
@@ -257,6 +264,32 @@ describe('/api/mcp', () => {
     expect(tools.find(t => t.name === 'delete_lesson')?.annotations).toMatchObject({
       readOnlyHint: false,
       destructiveHint: true,
+    });
+
+    // Виджеты MCP Apps: у инструмента ссылка на ui://-ресурс, ресурс отдаёт HTML с нужным mimeType.
+    const views = Object.fromEntries(tools.filter(t => t._meta).map(t => [t.name, t._meta?.ui.resourceUri]));
+    expect(views).toEqual({
+      list_students: 'ui://tutor-desk/students.html',
+      get_student: 'ui://tutor-desk/student.html',
+      create_student: 'ui://tutor-desk/student.html',
+      update_student: 'ui://tutor-desk/student.html',
+      get_lessons: 'ui://tutor-desk/week.html',
+      get_today: 'ui://tutor-desk/today.html',
+    });
+    const resources = await (await rpc(token, 'resources/list')).json<{ result: { resources: { uri: string }[] } }>();
+    expect(resources.result.resources).toHaveLength(4);
+    expect(resources.result.resources[0]).toMatchObject({ mimeType: 'text/html;profile=mcp-app' });
+    for (const uri of Object.values(views)) {
+      const read = await (
+        await rpc(token, 'resources/read', { uri })
+      ).json<{
+        result: { contents: { uri: string; mimeType: string; text: string }[] };
+      }>();
+      expect(read.result.contents[0]).toMatchObject({ uri, mimeType: 'text/html;profile=mcp-app' });
+      expect(read.result.contents[0]?.text).toContain('ui/initialize');
+    }
+    expect(await (await rpc(token, 'resources/read', { uri: 'ui://nope' })).json()).toMatchObject({
+      error: { code: -32002 },
     });
 
     expect(await (await rpc(token, 'nope')).json()).toMatchObject({ error: { code: -32601 } });
@@ -421,13 +454,19 @@ describe('/api/mcp', () => {
 
   it('запись: ученик, разовое занятие, перенос, отмена, удаление', async () => {
     const day = addDays(localDate(Date.now(), 'Europe/Moscow'), 2);
-    const created = (
+    // create_student и update_student отвечают карточкой ученика (как get_student) — её рисует виджет.
+    const card = (
       await callTool(token, 'create_student', { name: '  Через Claude ', exam: 'ege_profile', grade: 11 })
-    ).data() as Student;
-    expect(created).toMatchObject({ name: 'Через Claude', exam: 'ege_profile', grade: 11 });
+    ).data() as { student: Student; upcoming: unknown[]; mocks: unknown };
+    const created = card.student;
+    expect(card).toMatchObject({
+      student: { name: 'Через Claude', exam: 'ege_profile', grade: 11 },
+      upcoming: [],
+      mocks: { max: 32, items: [] },
+    });
     expect(
       (await callTool(token, 'update_student', { studentId: created.id, notes: 'хочет 80+', grade: null })).data(),
-    ).toMatchObject({ name: 'Через Claude', notes: 'хочет 80+', grade: null });
+    ).toMatchObject({ student: { name: 'Через Claude', notes: 'хочет 80+', grade: null } });
     expect((await callTool(token, 'create_student', { name: ' ' })).isError).toBe(true);
     expect(await callTool(token, 'update_student', { studentId: 'nope', notes: 'x' })).toMatchObject({
       isError: true,
@@ -464,7 +503,9 @@ describe('/api/mcp', () => {
     const tz = 'Europe/Moscow';
     const start = addDays(localDate(Date.now(), tz), 1);
     const next = addDays(start, 1);
-    const student = (await callTool(token, 'create_student', { name: 'Регулярный' })).data() as Student;
+    const { student } = (await callTool(token, 'create_student', { name: 'Регулярный' })).data() as {
+      student: Student;
+    };
     const lessonsOf = async () =>
       ((await callTool(token, 'get_lessons', { studentId: student.id })).data() as { lessons: View[] }).lessons;
 
@@ -505,5 +546,46 @@ describe('/api/mcp', () => {
     });
     expect(await lessonsOf()).toEqual([]);
     expect((await callTool(token, 'end_series', { seriesId: changed.id, fromDate: '2020-01-01' })).isError).toBe(true);
+  });
+
+  it('get_today и get_student: данные для виджетов, structuredContent только у объектов', async () => {
+    const tz = 'Europe/Moscow';
+    const today = localDate(Date.now(), tz);
+    const { student } = (
+      await callTool(token, 'create_student', { name: 'Карточка', exam: 'oge', contact: 'Telegram: @kartochka' })
+    ).data() as { student: Student };
+    // 00:30 сегодня — всегда «сегодня», даже если тест идёт за минуту до полуночи.
+    const early = (
+      await callTool(token, 'create_lesson', { studentId: student.id, date: today, time: '00:30', durationMin: 30 })
+    ).data() as View;
+    const later = (
+      await callTool(token, 'create_lesson', {
+        studentId: student.id,
+        date: addDays(today, 3),
+        time: '12:00',
+        durationMin: 60,
+      })
+    ).data() as View;
+
+    const day = (await callTool(token, 'get_today')).data() as { now: string; lessons: View[] };
+    expect(day.now.slice(0, 10)).toBe(today);
+    expect(day.lessons.map(l => l.id)).toContain(early.id);
+    expect(day.lessons.map(l => l.id)).not.toContain(later.id);
+
+    const raw = await (
+      await rpc(token, 'tools/call', { name: 'get_student', arguments: { studentId: student.id } })
+    ).json<{ result: { structuredContent: Record<string, unknown> } }>();
+    expect(raw.result.structuredContent).toMatchObject({
+      // Claude прислал «Telegram: @…» — сохранился только юзернейм.
+      student: { id: student.id, name: 'Карточка', exam: 'oge', contact: 'kartochka' },
+      upcoming: [{ id: later.id }],
+      series: [],
+      mocks: { max: 31, items: [] },
+    });
+    expect(await callTool(token, 'get_student', { studentId: 'nope' })).toMatchObject({ isError: true });
+
+    // structuredContent обязан быть объектом: у массива (list_students) его нет.
+    const list = await (await rpc(token, 'tools/call', { name: 'list_students' })).json<{ result: object }>();
+    expect(list.result).not.toHaveProperty('structuredContent');
   });
 });

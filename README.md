@@ -103,6 +103,7 @@ bunx wrangler secret put JWT_SECRET   # значение: openssl rand -base64 4
 
   Время в ответах — в поясе репетитора с offset. На входе дата `YYYY-MM-DD` и время `HH:MM` тоже в поясе репетитора. Пояс берётся из последнего созданного правила. `inputSchema` собирается из valibot-схем (`@valibot/to-json-schema`).
 
+- Виджеты MCP Apps (`views/`, расширение `io.modelcontextprotocol/ui`): `get_lessons` показывается неделей, `get_today` — днём, `list_students` — таблицей, `get_student` — карточкой ученика. Шаблоны отдаются через `resources/read` (`ui://tutor-desk/*.html`). Это самодостаточный HTML на CSS-переменных хоста, поэтому выглядит как сам Claude в светлой и тёмной теме. Данные виджет берёт из `structuredContent` или из текста результата. Telegram-ник ведёт ссылкой на `t.me`. Где виджеты не поддерживаются, Claude просто показывает текстовый ответ.
 - OAuth 2.1, public client + PKCE, без хранилища, всё на JWT. Токены подписаны ключом `JWT_SECRET + ':oauth'`, поэтому cookie-сессия не годится как Bearer, и наоборот.
   - `/api/oauth/register` (DCR): разрешены колбэки claude.ai/claude.com и loopback.
   - `/api/oauth/authorize`: форма логина и пароля с той же защитой от перебора.
