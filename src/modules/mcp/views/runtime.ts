@@ -11,7 +11,7 @@ const STYLES = `
 :root{color-scheme:light dark}
 html{background:transparent;overflow:hidden}
 *{box-sizing:border-box}
-body{margin:0;padding:4px 2px;background:transparent;color:var(--color-text-primary,CanvasText);font-family:var(--font-sans,system-ui,sans-serif);font-size:var(--font-text-sm-size,14px);line-height:var(--font-text-sm-line-height,1.45)}
+body{margin:0;padding:12px;background:transparent;color:var(--color-text-primary,CanvasText);font-family:var(--font-sans,system-ui,sans-serif);font-size:var(--font-text-sm-size,14px);line-height:var(--font-text-sm-line-height,1.45)}
 h2{margin:0;font-size:var(--font-heading-sm-size,16px);font-weight:var(--font-weight-semibold,600)}
 h3{margin:0;font-size:var(--font-text-xs-size,12px);font-weight:var(--font-weight-medium,500);color:var(--color-text-secondary,GrayText);text-transform:uppercase;letter-spacing:.04em}
 a{color:var(--color-text-info,LinkText);text-decoration:none}a:hover{text-decoration:underline}
@@ -25,22 +25,23 @@ a{color:var(--color-text-info,LinkText);text-decoration:none}a:hover{text-decora
 .sub{font-size:var(--font-text-xs-size,12px);color:var(--color-text-secondary,GrayText)}
 .tags{display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end}
 .tag{display:inline-block;padding:1px 8px;border-radius:var(--border-radius-full,999px);font-size:var(--font-text-xs-size,12px);background:var(--color-background-secondary,color-mix(in srgb,CanvasText 7%,transparent));color:var(--color-text-secondary,GrayText);white-space:nowrap}
-.tag.info{background:var(--color-background-info,#e6f0ff);color:var(--color-text-info,#1d4ed8)}
-.tag.success{background:var(--color-background-success,#e7f6ec);color:var(--color-text-success,#15803d)}
-.tag.warning{background:var(--color-background-warning,#fff4e0);color:var(--color-text-warning,#a15c00)}
-.tag.danger{background:var(--color-background-danger,#fdecec);color:var(--color-text-danger,#b91c1c)}
+.tag.info{background:var(--color-background-info,light-dark(#e6f0ff,#1c2f4d));color:var(--color-text-info,light-dark(#1d4ed8,#93b8f5))}
+.tag.success{background:var(--color-background-success,light-dark(#e7f6ec,#173a25));color:var(--color-text-success,light-dark(#15803d,#86d9a3))}
+.tag.warning{background:var(--color-background-warning,light-dark(#fff4e0,#45300f));color:var(--color-text-warning,light-dark(#a15c00,#f2c174))}
+.tag.danger{background:var(--color-background-danger,light-dark(#fdecec,#4a1d1d));color:var(--color-text-danger,light-dark(#b91c1c,#f3a3a3))}
 .cancelled .name,.cancelled .time{text-decoration:line-through;color:var(--color-text-tertiary,GrayText)}
 .past{opacity:.55}
-.now{background:var(--color-background-info,#e6f0ff)}
+.now{background:var(--color-background-info,light-dark(#e6f0ff,#1c2f4d))}
 .empty{padding:18px 14px;color:var(--color-text-secondary,GrayText)}
 table{width:100%;border-collapse:collapse}
 th{text-align:left;font-weight:var(--font-weight-medium,500);font-size:var(--font-text-xs-size,12px);color:var(--color-text-secondary,GrayText);padding:8px 14px}
 td{padding:10px 14px;border-top:var(--border-width-regular,1px) solid var(--color-border-secondary,color-mix(in srgb,CanvasText 8%,transparent));vertical-align:top}
 .num{text-align:right;font-variant-numeric:tabular-nums}
 .bar{height:6px;border-radius:999px;background:var(--color-background-secondary,color-mix(in srgb,CanvasText 8%,transparent));overflow:hidden}
-.bar>i{display:block;height:100%;background:var(--color-text-info,#2563eb)}
+.bar>i{display:block;height:100%;background:var(--color-text-info,light-dark(#2563eb,#93b8f5))}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;padding:12px 14px}
-@media (max-width:420px){.row{grid-template-columns:44px 1fr}.tags{grid-column:2;justify-content:flex-start}}
+/* На узком экране плашки уходят под имя; .keep — строки, где справа число, а не плашки. */
+@media (max-width:420px){.row:not(.keep){grid-template-columns:44px 1fr}.row:not(.keep) .tags{grid-column:2;justify-content:flex-start}.row.keep{grid-template-columns:44px 1fr auto}}
 `;
 
 /** Мост к хосту и общие хелперы; вызывает render(data) из скрипта конкретного виджета. */
@@ -82,9 +83,10 @@ const dotted = (...parts) => parts.filter(Boolean).flatMap((part, i) => (i ? [' 
 const examTag = exam => (exam ? el('span', { class: 'tag' }, EXAMS[exam] || exam) : null);
 const fileTags = files => files.map(f => el('span', { class: f.kind === 'mock' ? 'tag warning' : 'tag info' }, f.kind === 'mock' ? 'пробник' : 'домашка'));
 
-/** Строка занятия: время, ученик (или дата — в карточке ученика), длительность, перенос, отмена, файлы. */
-function lessonRow(l, extraClass, withDate) {
+/** Строка занятия: время, ученик (или дата — в карточке ученика), длительность, перенос, отмена, файлы; badge — метка первой плашкой. */
+function lessonRow(l, extraClass, withDate, badge) {
   const cancelled = l.status === 'cancelled';
+  const tags = [badge ? el('span', { class: 'tag success' }, badge) : null, cancelled ? el('span', { class: 'tag danger' }, 'отменено') : null, withDate ? null : examTag(l.student.exam), ...fileTags(l.assignments)].filter(Boolean);
   return el('div', { class: ['row', cancelled && 'cancelled', extraClass].filter(Boolean).join(' ') },
     el('div', { class: 'time' }, time(l.startsAt)),
     el('div', null,
@@ -95,7 +97,8 @@ function lessonRow(l, extraClass, withDate) {
         l.movedFrom ? 'перенесено с ' + dayTitle(l.movedFrom) + ' ' + time(l.movedFrom) : null,
       ].filter(Boolean).join(' · ')),
     ),
-    el('div', { class: 'tags' }, cancelled ? el('span', { class: 'tag danger' }, 'отменено') : null, withDate ? null : examTag(l.student.exam), fileTags(l.assignments)),
+    // Пустой блок плашек не рисуем: на узком экране он занял бы строку под именем.
+    tags.length ? el('div', { class: 'tags' }, tags) : null,
   );
 }
 
@@ -143,7 +146,8 @@ window.addEventListener('message', event => {
   else if (msg.id !== undefined) send({ id: msg.id, result: {} });
 });
 
-new ResizeObserver(() => send({ method: 'ui/notifications/size-changed', params: { height: document.documentElement.scrollHeight } })).observe(document.body);
+// Высота содержимого, а не scrollHeight: тот не бывает меньше текущей высоты iframe и не даёт виджету сжаться.
+new ResizeObserver(() => send({ method: 'ui/notifications/size-changed', params: { height: Math.ceil(document.body.getBoundingClientRect().height) } })).observe(document.body);
 
 request('ui/initialize', {
   protocolVersion: '2026-01-26',

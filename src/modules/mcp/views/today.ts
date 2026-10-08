@@ -19,12 +19,7 @@ function render(data) {
       el('span', { class: 'muted' }, live.length ? (left ? 'осталось ' + plural(left, 'занятие', 'занятия', 'занятий') : 'все занятия прошли') : ''),
     ),
     live.length || data.lessons.length
-      ? el('section', { class: 'card' }, data.lessons.map(l => {
-          const row = lessonRow(l, status(l));
-          const text = label(l);
-          if (text) row.lastChild.prepend(el('span', { class: 'tag success' }, text));
-          return row;
-        }))
+      ? el('section', { class: 'card' }, data.lessons.map(l => lessonRow(l, status(l), false, label(l))))
       : el('div', { class: 'card empty' }, 'Сегодня занятий нет'),
   );
 }

@@ -21,12 +21,11 @@ function render(data) {
     section('Ближайшие занятия', data.upcoming.length
       ? data.upcoming.map(l => lessonRow(l, null, true))
       : el('div', { class: 'empty' }, 'В ближайшие две недели занятий нет')),
-    data.series.length ? section('Регулярно', data.series.map(r => el('div', { class: 'row' },
+    data.series.length ? section('Регулярно', data.series.map(r => el('div', { class: 'row keep' },
       el('div', { class: 'time' }, r.startTime),
       el('div', null, el('div', null, EVERY[r.weekday] || r.weekday), el('div', { class: 'sub' }, r.durationMin + ' мин' + (r.endsOn ? ' · до ' + dayTitle(r.endsOn) : ''))),
-      el('div'),
     ))) : null,
-    s.exam || mocks.length ? section('Пробники', mocks.length ? mocks.map(m => el('div', { class: 'row' },
+    s.exam || mocks.length ? section('Пробники', mocks.length ? mocks.map(m => el('div', { class: 'row keep' },
       el('div', { class: 'time' }, '№' + m.number),
       el('div', null,
         el('div', { class: 'sub' }, dayTitle(m.lessonDate)),
