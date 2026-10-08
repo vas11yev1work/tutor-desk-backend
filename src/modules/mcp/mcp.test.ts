@@ -137,7 +137,11 @@ describe('OAuth', () => {
   it('вход: неверный пароль → 401 с формой, без Origin → 403, перебор → 429', async () => {
     const bad = await authorize({ login: env.ADMIN_LOGIN, password: 'nope' });
     expect(bad.status).toBe(401);
-    expect(await bad.text()).toContain('Неверный логин или пароль');
+    const badHtml = await bad.text();
+    expect(badHtml).toContain('Неверный логин или пароль');
+    // Логин остаётся в поле, пароль — нет.
+    expect(badHtml).toContain(`value="${env.ADMIN_LOGIN}"`);
+    expect(badHtml).not.toContain('value="nope"');
 
     const noOrigin = await api(
       '/oauth/authorize',

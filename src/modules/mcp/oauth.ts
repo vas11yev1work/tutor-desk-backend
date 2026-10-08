@@ -1,11 +1,13 @@
 import { type Context, Hono } from 'hono';
-import { html } from 'hono/html';
 import { sign, verify } from 'hono/jwt';
 import * as v from 'valibot';
 
 import { getDb } from '../../db';
 import { checkCredentials } from '../auth/attempts';
 import { csrfProtection } from '../auth/middleware';
+import { badRequestPage } from './pages/bad-request';
+import type { Html } from './pages/layout';
+import { loginPage } from './pages/login';
 
 /**
  * Минимальный OAuth 2.1 для MCP-коннектора Claude: один пользователь (админ), public client + PKCE.
@@ -71,71 +73,13 @@ const authorizeParams = v.object({
   resource: v.optional(v.string()),
 });
 
-type AuthorizeParams = v.InferOutput<typeof authorizeParams>;
-
-const page = (c: Context, body: ReturnType<typeof html>, status: 200 | 400 | 401 | 429 = 200) => {
-  // Страница с паролем не встраивается в чужие фреймы.
+/** Страница с паролем не встраивается в чужие фреймы. */
+const page = (c: Context, body: Html, status: 200 | 400 | 401 | 429 = 200) => {
   c.header('content-security-policy', "frame-ancestors 'none'");
-  return c.html(
-    html`<!doctype html>
-      <html lang="ru">
-        <head>
-          <meta charset="utf-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <title>Доступ для Claude</title>
-          <style>
-            body {
-              font:
-                16px system-ui,
-                sans-serif;
-              max-width: 360px;
-              margin: 12vh auto;
-              padding: 0 16px;
-            }
-            input,
-            button {
-              display: block;
-              width: 100%;
-              box-sizing: border-box;
-              margin: 8px 0;
-              padding: 10px;
-              font: inherit;
-            }
-            .err {
-              color: #c00;
-            }
-          </style>
-        </head>
-        <body>
-          ${body}
-        </body>
-      </html>`,
-    status,
-  );
+  return c.html(body, status);
 };
 
-const loginForm = (c: Context, params: AuthorizeParams, error?: string, status?: 401 | 429) =>
-  page(
-    c,
-    html`<h1>Доступ для Claude</h1>
-      <p>Claude сможет читать учеников, расписание и результаты пробников. Изменять ничего не сможет.</p>
-      ${error ? html`<p class="err">${error}</p>` : ''}
-      <form method="post">
-        ${Object.entries(params).map(([k, val]) => html`<input type="hidden" name="${k}" value="${val}" />`)}
-        <input name="login" placeholder="Логин" autocomplete="username" required />
-        <input name="password" type="password" placeholder="Пароль" autocomplete="current-password" required />
-        <button>Разрешить</button>
-      </form>`,
-    status,
-  );
-
-const badRequest = (c: Context) =>
-  page(
-    c,
-    html`<h1>Неверный запрос</h1>
-      <p>Начните подключение заново из Claude.</p>`,
-    400,
-  );
+const badRequest = (c: Context) => page(c, badRequestPage(), 400);
 
 const oauthError = (c: Context, error: string, status: 400 | 401 = 400) => c.json({ error }, status);
 
@@ -172,7 +116,7 @@ export const oauthRoutes = new Hono<{ Bindings: Env }>()
   })
   .get('/authorize', c => {
     const params = v.safeParse(authorizeParams, c.req.query());
-    return params.success ? loginForm(c, params.output) : badRequest(c);
+    return params.success ? page(c, loginPage(params.output)) : badRequest(c);
   })
   .post('/authorize', csrfProtection, async c => {
     const form = await c.req.parseBody<Record<string, string>>();
@@ -180,17 +124,14 @@ export const oauthRoutes = new Hono<{ Bindings: Env }>()
     if (!params.success) return badRequest(c);
     const p = params.output;
 
-    const now = Date.now();
+    const login = String(form.login ?? '');
     const ip = c.req.header('cf-connecting-ip') ?? 'local';
-    const result = await checkCredentials(
-      getDb(c.env),
-      c.env,
-      ip,
-      { login: String(form.login ?? ''), password: String(form.password ?? '') },
-      now,
-    );
-    if (typeof result === 'number') return loginForm(c, p, 'Слишком много попыток входа, попробуйте позже', 429);
-    if (result === 'invalid') return loginForm(c, p, 'Неверный логин или пароль', 401);
+    const credentials = { login, password: String(form.password ?? '') };
+    const result = await checkCredentials(getDb(c.env), c.env, ip, credentials, Date.now());
+    if (typeof result === 'number') {
+      return page(c, loginPage(p, { error: 'Слишком много попыток входа, попробуйте позже', login }), 429);
+    }
+    if (result === 'invalid') return page(c, loginPage(p, { error: 'Неверный логин или пароль', login }), 401);
 
     const code = await issue(c.env, 'code', CODE_TTL_S, { cc: p.code_challenge, ru: p.redirect_uri });
     const target = new URL(p.redirect_uri);
