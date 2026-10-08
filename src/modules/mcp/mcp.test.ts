@@ -208,7 +208,18 @@ describe('/api/mcp', () => {
     expect(init).toMatchObject({
       jsonrpc: '2.0',
       id: 1,
-      result: { protocolVersion: '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'tutor-desk' } },
+      result: {
+        protocolVersion: '2025-06-18',
+        capabilities: { tools: {} },
+        serverInfo: {
+          name: 'tutor-desk',
+          websiteUrl: 'http://localhost',
+          icons: [
+            { src: 'http://localhost/favicon.svg', mimeType: 'image/svg+xml', sizes: ['any'] },
+            expect.anything(),
+          ],
+        },
+      },
     });
     const unknownVersion = await (await rpc(token, 'initialize', { protocolVersion: '1999-01-01' })).json();
     expect(unknownVersion).toMatchObject({ result: { protocolVersion: '2025-11-25' } });

@@ -224,7 +224,17 @@ const callTool = async (db: Db, name: unknown, args: unknown) => {
   throw new RpcError(-32602, `Unknown tool: ${String(name)}`);
 };
 
-const handle = async (db: Db, method: string, params: Record<string, unknown>) => {
+/** Иконки фронта кабинета (тот же домен): иначе клиенты берут favicon корневого vslvv.com. */
+const serverInfo = (origin: string) => ({
+  ...SERVER_INFO,
+  websiteUrl: origin,
+  icons: [
+    { src: `${origin}/favicon.svg`, mimeType: 'image/svg+xml', sizes: ['any'] },
+    { src: `${origin}/icons/icon-192.png`, mimeType: 'image/png', sizes: ['192x192'] },
+  ],
+});
+
+const handle = async (db: Db, origin: string, method: string, params: Record<string, unknown>) => {
   switch (method) {
     case 'initialize': {
       const requested = params.protocolVersion;
@@ -232,7 +242,7 @@ const handle = async (db: Db, method: string, params: Record<string, unknown>) =
         protocolVersion:
           typeof requested === 'string' && PROTOCOL_VERSIONS.includes(requested) ? requested : PROTOCOL_VERSIONS[0],
         capabilities: { tools: {} },
-        serverInfo: SERVER_INFO,
+        serverInfo: serverInfo(origin),
         instructions: INSTRUCTIONS,
       };
     }
@@ -266,7 +276,11 @@ export const mcpRoutes = new Hono<{ Bindings: Env }>()
     // Уведомления и ответы клиента: подтверждаем без тела.
     if (typeof msg.method !== 'string' || msg.id === undefined) return c.body(null, 202);
     try {
-      return c.json({ jsonrpc: '2.0', id: msg.id, result: await handle(getDb(c.env), msg.method, msg.params ?? {}) });
+      return c.json({
+        jsonrpc: '2.0',
+        id: msg.id,
+        result: await handle(getDb(c.env), new URL(c.req.url).origin, msg.method, msg.params ?? {}),
+      });
     } catch (e) {
       if (!(e instanceof RpcError)) throw e;
       return c.json({ jsonrpc: '2.0', id: msg.id, error: { code: e.code, message: e.message } });
