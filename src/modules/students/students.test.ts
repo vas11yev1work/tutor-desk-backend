@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import { adminApi, type AdminAuth, api, loginAsAdmin, ORIGIN } from '../../test/helpers';
 import type { Student } from './schema';
+import { nameSlug, newAccessToken } from './token';
 
 let auth: AdminAuth;
 beforeAll(async () => {
@@ -49,7 +50,7 @@ describe('ученики', () => {
   it('создание, чтение, изменение', async () => {
     const created = await createStudent({ grade: 9, exam: 'oge', contact: '@masha', notes: 'любит геометрию' });
     expect(created).toMatchObject({ name: 'Маша', grade: 9, exam: 'oge' });
-    expect(created.accessToken).toHaveLength(24);
+    expect(created.accessToken).toMatch(/^masha-[0-9A-Za-z]{8}$/);
 
     const got = await adminApi(auth, `/admin/students/${created.id}`);
     expect(await got.json()).toEqual(created);
@@ -92,7 +93,19 @@ describe('ученики', () => {
     const student = await createStudent();
     const res = await adminApi(auth, `/admin/students/${student.id}/regenerate-token`, { method: 'POST' });
     const updated = await res.json<Student>();
-    expect(updated.accessToken).toHaveLength(24);
+    expect(updated.accessToken).toMatch(/^masha-[0-9A-Za-z]{8}$/);
     expect(updated.accessToken).not.toBe(student.accessToken);
+  });
+});
+
+describe('личная ссылка', () => {
+  it('имя латиницей + 8 случайных символов', () => {
+    expect(nameSlug('Маша Иванова')).toBe('masha');
+    expect(nameSlug('  Артём ')).toBe('artem');
+    expect(nameSlug('Щука-Юля')).toBe('shchukayulya');
+    expect(nameSlug('John Smith')).toBe('john');
+    expect(nameSlug('🙂')).toBe('');
+    expect(newAccessToken('🙂')).toMatch(/^[0-9A-Za-z]{8}$/);
+    expect(newAccessToken('Аня')).toMatch(/^anya-[0-9A-Za-z]{8}$/);
   });
 });
