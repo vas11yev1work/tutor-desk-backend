@@ -118,7 +118,7 @@ const loginForm = (c: Context, params: AuthorizeParams, error?: string, status?:
   page(
     c,
     html`<h1>Доступ для Claude</h1>
-      <p>Claude сможет читать учеников и результаты пробников. Изменять ничего не сможет.</p>
+      <p>Claude сможет читать учеников, расписание и результаты пробников. Изменять ничего не сможет.</p>
       ${error ? html`<p class="err">${error}</p>` : ''}
       <form method="post">
         ${Object.entries(params).map(([k, val]) => html`<input type="hidden" name="${k}" value="${val}" />`)}

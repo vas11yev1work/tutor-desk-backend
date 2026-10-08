@@ -1,9 +1,11 @@
+import { TZDate } from '@date-fns/tz';
 import { env, exports } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { adminApi, type AdminAuth, api, loginAsAdmin, ORIGIN } from '../../test/helpers';
 import { EXAM_MAX_SCORES } from '../assignments/scores';
 import type { Lesson } from '../schedule/schema';
+import { addDays, isoWeekday, localDate, toUtc } from '../schedule/time';
 import type { Student } from '../students/schema';
 import { EXAM_TOPICS } from './topics';
 
@@ -210,12 +212,15 @@ describe('/api/mcp', () => {
     expect((await post(token, { jsonrpc: '2.0', method: 'notifications/initialized' })).status).toBe(202);
 
     const list = await (await rpc(token, 'tools/list')).json<{ result: { tools: { name: string }[] } }>();
-    expect(list.result.tools.map(t => t.name)).toEqual(['list_students', 'get_mocks']);
+    expect(list.result.tools.map(t => t.name)).toEqual(['list_students', 'get_mocks', 'get_lessons', 'get_series']);
 
     expect(await (await rpc(token, 'nope')).json()).toMatchObject({ error: { code: -32601 } });
     expect(await (await rpc(token, 'tools/call', { name: 'nope' })).json()).toMatchObject({ error: { code: -32602 } });
     expect((await api('/mcp', { headers: { authorization: `Bearer ${token}` } })).status).toBe(405);
   });
+
+  // Правил ещё нет → пояс репетитора UTC; тест расписания ниже создаёт правило в Москве.
+  const utc = (iso: Date | string) => new TZDate(+new Date(iso), 'UTC').toISOString();
 
   it('list_students и get_mocks: баллы по номерам с темами', async () => {
     const student = await (
@@ -272,8 +277,8 @@ describe('/api/mcp', () => {
           name: 'Аналитика',
           exam: 'ege_base',
           mocks: [
-            { number: 1, lessonDate: lesson.startsAt, scores, total: 20, comment: 'проценты' },
-            { number: 2, lessonDate: lesson.startsAt, scores: null, total: null, comment: null },
+            { number: 1, lessonDate: utc(lesson.startsAt), scores, total: 20, comment: 'проценты' },
+            { number: 2, lessonDate: utc(lesson.startsAt), scores: null, total: null, comment: null },
           ],
         },
       ],
@@ -287,5 +292,81 @@ describe('/api/mcp', () => {
       text: 'Ученик не найден',
     });
     expect((await callTool(token, 'get_mocks', { studentId: 1 })).isError).toBe(true);
+  });
+
+  it('get_lessons и get_series: время в поясе репетитора, файлы, регулярность', async () => {
+    const tz = 'Europe/Moscow';
+    const tomorrow = addDays(localDate(Date.now(), tz), 1);
+    const student = await (
+      await adminApi(auth, '/admin/students', { method: 'POST', body: { name: 'Расписание', exam: 'oge' } })
+    ).json<Student>();
+    const rule = { weekday: isoWeekday(tomorrow), startTime: '18:00', durationMin: 90, timezone: tz };
+    await adminApi(auth, '/admin/series', {
+      method: 'POST',
+      body: { studentId: student.id, startsOn: tomorrow, ...rule },
+    });
+    const oneOff = await (
+      await adminApi(auth, '/admin/lessons', {
+        method: 'POST',
+        body: {
+          studentId: student.id,
+          startsAt: new Date(toUtc(tomorrow, '10:00', tz)).toISOString(),
+          durationMin: 60,
+        },
+      })
+    ).json<Lesson>();
+    const body = new FormData();
+    body.append('file', new File(['%PDF-1.7\nhw'], 'ДЗ.pdf'));
+    body.append('kind', 'homework');
+    await api(`/admin/lessons/${oneOff.id}/assignments`, { method: 'POST', headers: auth, body });
+
+    type Lessons = { now: string; timezone: string; lessons: Record<string, unknown>[] };
+    const week = (await callTool(token, 'get_lessons', { studentId: student.id })).data() as Lessons;
+    expect(week.timezone).toBe(tz);
+    expect(week.now).toMatch(/\+03:00$/);
+    const day = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'][rule.weekday - 1];
+    const common = { weekday: day, status: 'scheduled', movedFrom: null };
+    const who = { id: student.id, name: 'Расписание', grade: null, exam: 'oge' };
+    expect(week.lessons).toEqual([
+      {
+        ...common,
+        id: oneOff.id,
+        startsAt: `${tomorrow}T10:00:00.000+03:00`,
+        durationMin: 60,
+        regular: false,
+        student: who,
+        assignments: [{ kind: 'homework', fileName: 'ДЗ.pdf' }],
+      },
+      {
+        ...common,
+        id: expect.any(String) as string,
+        startsAt: `${tomorrow}T18:00:00.000+03:00`,
+        durationMin: 90,
+        regular: true,
+        student: who,
+        assignments: [],
+      },
+    ]);
+
+    // Прошлое без занятий; ошибки ввода — isError, а не исключение.
+    const past = (
+      await callTool(token, 'get_lessons', { studentId: student.id, from: '2020-01-01', to: '2020-01-31' })
+    ).data() as Lessons;
+    expect(past.lessons).toEqual([]);
+    for (const args of [{ from: 'завтра' }, { from: '2020-02-01', to: '2020-01-01' }, { from: '2020-01-01' }]) {
+      expect((await callTool(token, 'get_lessons', args)).isError, JSON.stringify(args)).toBe(true);
+    }
+
+    expect((await callTool(token, 'get_series', { studentId: student.id })).data()).toEqual([
+      {
+        student: { id: student.id, name: 'Расписание' },
+        weekday: day,
+        startTime: '18:00',
+        durationMin: 90,
+        timezone: tz,
+        startsOn: tomorrow,
+        endsOn: null,
+      },
+    ]);
   });
 });
