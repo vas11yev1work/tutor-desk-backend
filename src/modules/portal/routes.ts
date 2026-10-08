@@ -5,6 +5,7 @@ import { Hono } from 'hono';
 import { type Db, getDb } from '../../db';
 import { notFound } from '../../lib/errors';
 import { onInvalid, rangeQuery } from '../../lib/validation';
+import { EXAM_MAX_SCORES, sum } from '../assignments/scores';
 import { fileResponse, listMocks } from '../assignments/service';
 import { listLessons } from '../schedule/service';
 import { students } from '../students/schema';
@@ -24,7 +25,8 @@ const findStudent = async (db: Db, token: string) => {
 export const portalRoutes = new Hono<{ Bindings: Env }>()
   .get('/:token', async c => {
     const { id: _id, ...profile } = await findStudent(getDb(c.env), c.req.param('token'));
-    return c.json(profile);
+    // Максимальный первичный балл — для «16 / 32» у пробников.
+    return c.json({ ...profile, examMax: profile.exam ? sum(EXAM_MAX_SCORES[profile.exam]) : null });
   })
   .get('/:token/lessons', sValidator('query', rangeQuery, onInvalid), async c => {
     const db = getDb(c.env);
@@ -50,6 +52,8 @@ export const portalRoutes = new Hono<{ Bindings: Env }>()
         number: m.number,
         fileName: m.fileName,
         lessonStartsAt: m.lessonStartsAt,
+        // Только итог после проверки; баллы по номерам и комментарий — для репетитора.
+        total: m.total,
         createdAt: m.createdAt,
       })),
     );

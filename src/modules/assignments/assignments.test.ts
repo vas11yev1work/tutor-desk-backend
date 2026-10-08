@@ -94,7 +94,7 @@ describe('задания: домашки и пробники', () => {
     ]);
     const portal = await (await api(`/s/${student.accessToken}/mocks`)).json();
     expect(portal).toMatchObject([
-      { id: first.id, number: 1, fileName: 'П1.pdf', lessonStartsAt: lesson.startsAt },
+      { id: first.id, number: 1, fileName: 'П1.pdf', lessonStartsAt: lesson.startsAt, total: null },
       { id: second.id, number: 2, fileName: 'П2.pdf', lessonStartsAt: later.startsAt },
     ]);
   });
@@ -120,6 +120,10 @@ describe('задания: домашки и пробники', () => {
     expect(await res.json()).toMatchObject({ scores, total: 22, comment: 'в №15 перепутал знак' });
     const [listed] = await (await adminApi(auth, `/admin/students/${student.id}/mocks`)).json<Uploaded[]>();
     expect(listed).toMatchObject({ scores, total: 22, comment: 'в №15 перепутал знак' });
+    const [seen] = await (await api(`/s/${student.accessToken}/mocks`)).json<Record<string, unknown>[]>();
+    expect(seen).toMatchObject({ id: mock.id, number: 1, lessonStartsAt: lesson.startsAt, total: 22 });
+    expect(seen).not.toHaveProperty('scores');
+    expect(seen).not.toHaveProperty('comment');
 
     for (const [body, code] of [
       [{ scores: scores.slice(1) }, 'invalid_scores'],
