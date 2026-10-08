@@ -39,7 +39,7 @@ app.route('/admin/assignments', assignmentsRoutes);
 app.get('/admin/exams', c => c.json(EXAM_MAX_SCORES));
 // Публичный контур ученика: вне /admin, поэтому auth и csrf на него не действуют.
 app.route('/s', portalRoutes);
-// MCP-коннектор для Claude: OAuth-вход и read-only инструменты (src/modules/mcp).
+// MCP-коннектор для Claude: OAuth-вход, чтение и изменение учеников и расписания (src/modules/mcp).
 app.route('/oauth', oauthRoutes);
 app.route('/mcp', mcpRoutes);
 

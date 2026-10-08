@@ -92,15 +92,16 @@ bunx wrangler secret put JWT_SECRET   # значение: openssl rand -base64 4
 
 ## MCP-коннектор для Claude
 
-Расписание и аналитика пробников из Claude (claude.ai, приложения, Claude Code). Только чтение. Код — `src/modules/mcp`.
+Расписание, ученики и аналитика пробников из Claude (claude.ai, приложения, Claude Code). Код — `src/modules/mcp`, инструменты — в `tools/`.
 
 - `POST /api/mcp`: MCP по Streamable HTTP, JSON-RPC, без сессий и SSE. Инструменты:
   - `list_students` — ученики и счётчики пробников;
   - `get_mocks(studentId?)` — баллы по номерам вместе с максимумами и темами из `topics.ts`;
   - `get_lessons(from?, to?, studentId?)` — занятия с файлами (домашка, пробник). По умолчанию с текущего момента на 7 дней вперёд;
-  - `get_series(studentId?)` — действующие регулярные правила.
+  - `get_series(studentId?)` — действующие регулярные правила;
+  - запись (`tools/write.ts`): `create_student`, `update_student`, `create_lesson`, `move_lesson`, `cancel_lesson`, `restore_lesson`, `delete_lesson` (только разовые), `create_series`, `change_series`, `end_series`. Используются те же сервисы, что у кабинета. Удалить ученика или файлы из Claude нельзя.
 
-  Время отдаётся в поясе репетитора с offset. Пояс берётся из последнего созданного правила.
+  Время в ответах — в поясе репетитора с offset. На входе дата `YYYY-MM-DD` и время `HH:MM` тоже в поясе репетитора. Пояс берётся из последнего созданного правила. `inputSchema` собирается из valibot-схем (`@valibot/to-json-schema`).
 
 - OAuth 2.1, public client + PKCE, без хранилища, всё на JWT. Токены подписаны ключом `JWT_SECRET + ':oauth'`, поэтому cookie-сессия не годится как Bearer, и наоборот.
   - `/api/oauth/register` (DCR): разрешены колбэки claude.ai/claude.com и loopback.

@@ -19,9 +19,9 @@ import {
 } from './service';
 import { isTimeZone } from './time';
 
-const durationMin = v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(24 * 60));
+export const durationMin = v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(24 * 60));
 
-const rule = {
+export const rule = {
   weekday: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(7)),
   startTime: v.pipe(v.string(), v.regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Ожидается HH:MM')),
   durationMin,

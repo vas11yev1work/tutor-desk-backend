@@ -226,8 +226,38 @@ describe('/api/mcp', () => {
 
     expect((await post(token, { jsonrpc: '2.0', method: 'notifications/initialized' })).status).toBe(202);
 
-    const list = await (await rpc(token, 'tools/list')).json<{ result: { tools: { name: string }[] } }>();
-    expect(list.result.tools.map(t => t.name)).toEqual(['list_students', 'get_mocks', 'get_lessons', 'get_series']);
+    type Listed = { name: string; inputSchema: Record<string, unknown>; annotations: Record<string, unknown> };
+    const list = await (await rpc(token, 'tools/list')).json<{ result: { tools: Listed[] } }>();
+    const tools = list.result.tools;
+    expect(tools.map(t => t.name)).toEqual([
+      'list_students',
+      'get_mocks',
+      'get_lessons',
+      'get_series',
+      'create_student',
+      'update_student',
+      'create_lesson',
+      'move_lesson',
+      'cancel_lesson',
+      'restore_lesson',
+      'delete_lesson',
+      'create_series',
+      'change_series',
+      'end_series',
+    ]);
+    // inputSchema собран из valibot: обязательные поля, описания, без $schema.
+    const createLesson = tools.find(t => t.name === 'create_lesson');
+    expect(createLesson?.inputSchema).toMatchObject({
+      type: 'object',
+      required: ['studentId', 'date', 'time', 'durationMin'],
+      properties: { date: { type: 'string', format: 'date', description: 'YYYY-MM-DD в поясе репетитора' } },
+    });
+    expect(createLesson?.inputSchema).not.toHaveProperty('$schema');
+    expect(tools.find(t => t.name === 'get_lessons')?.annotations).toMatchObject({ readOnlyHint: true });
+    expect(tools.find(t => t.name === 'delete_lesson')?.annotations).toMatchObject({
+      readOnlyHint: false,
+      destructiveHint: true,
+    });
 
     expect(await (await rpc(token, 'nope')).json()).toMatchObject({ error: { code: -32601 } });
     expect(await (await rpc(token, 'tools/call', { name: 'nope' })).json()).toMatchObject({ error: { code: -32602 } });
@@ -272,6 +302,7 @@ describe('/api/mcp', () => {
       name: 'Аналитика',
       grade: 11,
       exam: 'ege_base',
+      contact: null,
       notes: 'путает проценты',
       mocks: 2,
       scoredMocks: 1,
@@ -374,6 +405,7 @@ describe('/api/mcp', () => {
 
     expect((await callTool(token, 'get_series', { studentId: student.id })).data()).toEqual([
       {
+        id: expect.any(String) as string,
         student: { id: student.id, name: 'Расписание' },
         weekday: day,
         startTime: '18:00',
@@ -383,5 +415,95 @@ describe('/api/mcp', () => {
         endsOn: null,
       },
     ]);
+  });
+
+  type View = { id: string; startsAt: string; durationMin: number; status: string; regular: boolean };
+
+  it('запись: ученик, разовое занятие, перенос, отмена, удаление', async () => {
+    const day = addDays(localDate(Date.now(), 'Europe/Moscow'), 2);
+    const created = (
+      await callTool(token, 'create_student', { name: '  Через Claude ', exam: 'ege_profile', grade: 11 })
+    ).data() as Student;
+    expect(created).toMatchObject({ name: 'Через Claude', exam: 'ege_profile', grade: 11 });
+    expect(
+      (await callTool(token, 'update_student', { studentId: created.id, notes: 'хочет 80+', grade: null })).data(),
+    ).toMatchObject({ name: 'Через Claude', notes: 'хочет 80+', grade: null });
+    expect((await callTool(token, 'create_student', { name: ' ' })).isError).toBe(true);
+    expect(await callTool(token, 'update_student', { studentId: 'nope', notes: 'x' })).toMatchObject({
+      isError: true,
+      text: 'Ученик не найден',
+    });
+
+    const call = async (name: string, args: Record<string, unknown>) =>
+      (await callTool(token, name, args)).data() as View;
+    const lesson = await call('create_lesson', { studentId: created.id, date: day, time: '15:30', durationMin: 60 });
+    expect(lesson).toMatchObject({ startsAt: `${day}T15:30:00.000+03:00`, regular: false, status: 'scheduled' });
+
+    // Только время — дата остаётся; только длительность — время остаётся.
+    expect(await call('move_lesson', { lessonId: lesson.id, time: '17:00' })).toMatchObject({
+      startsAt: `${day}T17:00:00.000+03:00`,
+      durationMin: 60,
+    });
+    expect(await call('move_lesson', { lessonId: lesson.id, durationMin: 90 })).toMatchObject({
+      startsAt: `${day}T17:00:00.000+03:00`,
+      durationMin: 90,
+    });
+    expect((await callTool(token, 'move_lesson', { lessonId: lesson.id })).isError).toBe(true);
+
+    expect(await call('cancel_lesson', { lessonId: lesson.id })).toMatchObject({ status: 'cancelled' });
+    expect(await call('restore_lesson', { lessonId: lesson.id })).toMatchObject({ status: 'scheduled' });
+
+    expect((await callTool(token, 'delete_lesson', { lessonId: lesson.id })).data()).toEqual({ deleted: lesson.id });
+    expect(await callTool(token, 'cancel_lesson', { lessonId: lesson.id })).toMatchObject({
+      isError: true,
+      text: 'Занятие не найдено',
+    });
+  });
+
+  it('запись: регулярное расписание — создать, изменить, завершить; регулярное занятие не удалить', async () => {
+    const tz = 'Europe/Moscow';
+    const start = addDays(localDate(Date.now(), tz), 1);
+    const next = addDays(start, 1);
+    const student = (await callTool(token, 'create_student', { name: 'Регулярный' })).data() as Student;
+    const lessonsOf = async () =>
+      ((await callTool(token, 'get_lessons', { studentId: student.id })).data() as { lessons: View[] }).lessons;
+
+    // Пояс не передан → пояс репетитора (из правила в тесте выше).
+    const series = (
+      await callTool(token, 'create_series', {
+        studentId: student.id,
+        startsOn: start,
+        weekday: isoWeekday(start),
+        startTime: '19:00',
+        durationMin: 60,
+      })
+    ).data() as { id: string };
+    expect(series).toMatchObject({ studentId: student.id, startTime: '19:00', timezone: tz, startsOn: start });
+
+    const [regular] = await lessonsOf();
+    expect(regular).toMatchObject({ startsAt: `${start}T19:00:00.000+03:00`, regular: true });
+    const refused = await callTool(token, 'delete_lesson', { lessonId: regular?.id });
+    expect(refused).toMatchObject({ isError: true });
+    expect(refused.text).toContain('только отменить');
+
+    const changed = (
+      await callTool(token, 'change_series', {
+        seriesId: series.id,
+        fromDate: start,
+        weekday: isoWeekday(next),
+        startTime: '20:00',
+        durationMin: 45,
+      })
+    ).data() as { id: string };
+    expect(changed).toMatchObject({ startTime: '20:00', durationMin: 45, timezone: tz, startsOn: start });
+    expect(changed.id).not.toBe(series.id);
+    expect(await lessonsOf()).toMatchObject([{ startsAt: `${next}T20:00:00.000+03:00`, durationMin: 45 }]);
+
+    expect((await callTool(token, 'end_series', { seriesId: changed.id, fromDate: start })).data()).toEqual({
+      ended: changed.id,
+      lastDay: addDays(start, -1),
+    });
+    expect(await lessonsOf()).toEqual([]);
+    expect((await callTool(token, 'end_series', { seriesId: changed.id, fromDate: '2020-01-01' })).isError).toBe(true);
   });
 });
