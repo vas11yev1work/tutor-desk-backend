@@ -25,7 +25,7 @@ export const assignmentsRoutes = new Hono<{ Bindings: Env }>()
     sValidator(
       'json',
       v.object({
-        scores: v.nullable(v.array(v.pipe(v.number(), v.integer(), v.minValue(0)))),
+        scores: v.nullable(v.array(v.nullable(v.pipe(v.number(), v.integer(), v.minValue(0))))),
         comment: v.optional(v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(2000)))),
       }),
       onInvalid,

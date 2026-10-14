@@ -25,7 +25,8 @@ export const assignments = sqliteTable(
     fileName: text('file_name').notNull(),
     size: integer('size').notNull(),
     // Только у пробника: первичные баллы по номерам заданий; null — ещё не проверен.
-    scores: text('scores', { mode: 'json' }).$type<number[]>(),
+    // null внутри массива — задание не решалось, 0 — решено неверно.
+    scores: text('scores', { mode: 'json' }).$type<(number | null)[]>(),
     comment: text('comment'),
     ...timestamps,
   },

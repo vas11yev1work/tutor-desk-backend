@@ -114,7 +114,7 @@ describe('задания: домашки и пробники', () => {
     const score = (id: string, body: unknown) =>
       adminApi(auth, `/admin/assignments/${id}/score`, { method: 'PUT', body });
 
-    const scores = [...Array<number>(12).fill(1), 2, 3, 0, 1, 0, 4, 0];
+    const scores = [...Array<number>(12).fill(1), 2, 3, 0, 1, 0, 4, null];
     const res = await score(mock.id, { scores, comment: 'в №15 перепутал знак' });
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ scores, total: 22, comment: 'в №15 перепутал знак' });

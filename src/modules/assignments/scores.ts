@@ -9,4 +9,5 @@ export const EXAM_MAX_SCORES: Record<NonNullable<Student['exam']>, number[]> = {
   ege_profile: [...rep(1, 12), 2, 3, 2, 2, 3, 4, 4],
 };
 
-export const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
+/** null в баллах — задание не решалось, считается как 0. */
+export const sum = (xs: (number | null)[]) => xs.reduce<number>((a, b) => a + (b ?? 0), 0);

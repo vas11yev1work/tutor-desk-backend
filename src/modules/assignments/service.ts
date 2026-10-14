@@ -75,7 +75,7 @@ export const listMocks = async (db: Db, studentId: string) => {
 };
 
 /** Баллы пробника по номерам заданий экзамена ученика; scores: null — снять оценку. */
-export const scoreMock = async (db: Db, id: string, input: { scores: number[] | null; comment?: string | null }) => {
+export const scoreMock = async (db: Db, id: string, input: { scores: (number | null)[] | null; comment?: string | null }) => {
   const row = await db
     .select({ kind: assignments.kind, exam: students.exam })
     .from(assignments)
@@ -87,7 +87,7 @@ export const scoreMock = async (db: Db, id: string, input: { scores: number[] | 
   // Экзамен могли убрать из профиля уже после выдачи пробника.
   if (!row.exam) throw noExam();
   const max = EXAM_MAX_SCORES[row.exam];
-  if (input.scores && (input.scores.length !== max.length || input.scores.some((s, i) => s > (max[i] ?? 0)))) {
+  if (input.scores && (input.scores.length !== max.length || input.scores.some((s, i) => (s ?? 0) > (max[i] ?? 0)))) {
     throw new ApiError(400, 'invalid_scores', `Нужно ${max.length} баллов, максимум по номерам: ${max.join(', ')}`);
   }
   const [updated] = await db
