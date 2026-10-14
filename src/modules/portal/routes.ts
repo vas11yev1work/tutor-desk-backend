@@ -61,7 +61,8 @@ export const portalRoutes = new Hono<{ Bindings: Env }>()
         number: m.number,
         fileName: m.fileName,
         lessonStartsAt: m.lessonStartsAt,
-        // Только итог после проверки; баллы по номерам и комментарий — для репетитора.
+        // Баллы по номерам (null — не решалось) и итог; комментарий — только для репетитора.
+        scores: m.scores,
         total: m.total,
         createdAt: m.createdAt,
       })),

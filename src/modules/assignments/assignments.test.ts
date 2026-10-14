@@ -121,8 +121,7 @@ describe('задания: домашки и пробники', () => {
     const [listed] = await (await adminApi(auth, `/admin/students/${student.id}/mocks`)).json<Uploaded[]>();
     expect(listed).toMatchObject({ scores, total: 22, comment: 'в №15 перепутал знак' });
     const [seen] = await (await api(`/s/${student.accessToken}/mocks`)).json<Record<string, unknown>[]>();
-    expect(seen).toMatchObject({ id: mock.id, number: 1, lessonStartsAt: lesson.startsAt, total: 22 });
-    expect(seen).not.toHaveProperty('scores');
+    expect(seen).toMatchObject({ id: mock.id, number: 1, lessonStartsAt: lesson.startsAt, scores, total: 22 });
     expect(seen).not.toHaveProperty('comment');
 
     for (const [body, code] of [
